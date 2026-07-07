@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>wqc-miner</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0f1419;
+      --panel: #1a2332;
+      --border: #2d3a4f;
+      --text: #e7ecf3;
+      --muted: #8b9bb4;
+      --accent: #5b9fd4;
+      --ok: #3ecf8e;
+      --warn: #e8b84a;
+      --danger: #e85d5d;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+    }
+    main {
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 2rem 1.25rem 4rem;
+    }
+    h1 { font-size: 1.5rem; margin: 0 0 0.25rem; }
+    .subtitle { color: var(--muted); margin-bottom: 1.5rem; }
+    section {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1.25rem;
+      margin-bottom: 1rem;
+    }
+    h2 { font-size: 1rem; margin: 0 0 1rem; }
+    label {
+      display: block;
+      font-size: 0.85rem;
+      color: var(--muted);
+      margin-bottom: 0.35rem;
+    }
+    input, textarea, select {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      padding: 0.55rem 0.65rem;
+      margin-bottom: 0.85rem;
+      font: inherit;
+    }
+    textarea { min-height: 4rem; resize: vertical; }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+    @media (max-width: 560px) { .row { grid-template-columns: 1fr; } }
+    .actions { display: flex; gap: 0.75rem; flex-wrap: wrap; }
+    button {
+      border: none;
+      border-radius: 6px;
+      padding: 0.6rem 1rem;
+      font: inherit;
+      cursor: pointer;
+    }
+    .primary { background: var(--accent); color: #061018; font-weight: 600; }
+    .secondary { background: transparent; color: var(--text); border: 1px solid var(--border); }
+    .danger { background: var(--danger); color: #1a0505; font-weight: 600; }
+    .badge {
+      display: inline-block;
+      padding: 0.2rem 0.55rem;
+      border-radius: 999px;
+      font-size: 0.8rem;
+      font-weight: 600;
+    }
+    .badge.ok { background: rgba(62, 207, 142, 0.15); color: var(--ok); }
+    .badge.off { background: rgba(139, 155, 180, 0.15); color: var(--muted); }
+    .badge.warn { background: rgba(232, 184, 74, 0.15); color: var(--warn); }
+    #message { min-height: 1.25rem; color: var(--warn); font-size: 0.9rem; }
+    pre {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0.75rem;
+      overflow: auto;
+      font-size: 0.8rem;
+      max-height: 240px;
+    }
+    .meta { font-size: 0.85rem; color: var(--muted); word-break: break-all; }
+    .network-panel { margin-bottom: 1rem; }
+    .hidden { display: none; }
+    .mock-note {
+      font-size: 0.85rem;
+      color: var(--warn);
+      margin: -0.35rem 0 0.85rem;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>wqc-miner</h1>
+    <p class="subtitle">Local launcher for WQC worker nodes</p>
+
+    <section>
+      <h2>Status</h2>
+      <p>
+        Network: <span id="network-badge" class="badge off">—</span>
+        · Mining: <span id="mining-badge" class="badge off">stopped</span>
+      </p>
+      <p class="meta">Core: <span id="core-status">—</span> · Node: <span id="node-status">—</span></p>
+      <p class="meta">Data dir: <span id="data-dir">—</span></p>
+      <p class="meta" id="status-message"></p>
+      <div class="actions" style="margin-top: 1rem;">
+        <button class="primary" id="btn-start">Start mining</button>
+        <button class="danger" id="btn-stop">Stop</button>
+        <button class="secondary" id="btn-refresh">Refresh node status</button>
+      </div>
+      <p id="message"></p>
+    </section>
+
+    <section>
+      <h2>Settings</h2>
+      <form id="settings-form">
+        <div class="network-panel">
+          <label for="network">Network</label>
+          <select id="network">
+            <option value="testnet">Testnet</option>
+            <option value="mainnet">Mainnet</option>
+          </select>
+        </div>
+
+        <div id="testnet-fields">
+          <label for="node_key">Node key (from dashboard)</label>
+          <textarea id="node_key" placeholder="Paste operator node key here" autocomplete="off"></textarea>
+        </div>
+
+        <div id="mainnet-fields" class="hidden">
+          <label for="wallet_address">Wallet address</label>
+          <input id="wallet_address" type="text" placeholder="0x… or your payout address" autocomplete="off" />
+          <p class="mock-note">Mainnet is mock-only for now — wallet is saved locally; P2P is not connected yet.</p>
+        </div>
+
+        <label for="bootstrap_urls">Bootstrap URLs (one per line)</label>
+        <textarea id="bootstrap_urls"></textarea>
+
+        <div class="row">
+          <div>
+            <label for="max_memory_gb">Max memory (GiB)</label>
+            <input id="max_memory_gb" type="number" min="0.1" step="0.1" />
+          </div>
+          <div>
+            <label for="p2p_listen_port">P2P listen port</label>
+            <input id="p2p_listen_port" type="number" min="1" max="65535" />
+          </div>
+        </div>
+
+        <div class="row">
+          <div>
+            <label for="node_http_port">Node HTTP port</label>
+            <input id="node_http_port" type="number" min="1" max="65535" />
+          </div>
+          <div>
+            <label for="core_tcp_port">Core TCP port (Windows)</label>
+            <input id="core_tcp_port" type="number" min="1" max="65535" />
+          </div>
+        </div>
+
+        <p class="meta">Core URL: <span id="core-url">—</span></p>
+        <div class="actions">
+          <button type="submit" class="primary">Save settings</button>
+        </div>
+      </form>
+    </section>
+
+    <section>
+      <h2>Node /status</h2>
+      <pre id="node-json">Not running</pre>
+    </section>
+  </main>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const BOOTSTRAP_DEFAULTS = {
+      testnet: ["https://testnet.world-qc.io/api/v1/p2p/bootstrap"],
+      mainnet: ["https://world-qc.io/api/v1/p2p/bootstrap"],
+    };
+
+    const message = (text, isError = false) => {
+      const el = $("message");
+      el.textContent = text || "";
+      el.style.color = isError ? "var(--danger)" : "var(--warn)";
+    };
+
+    async function api(path, options = {}) {
+      const res = await fetch(path, {
+        headers: { "Content-Type": "application/json" },
+        ...options,
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.error || res.statusText);
+      return body;
+    }
+
+    function toggleNetworkFields(network) {
+      const isMainnet = network === "mainnet";
+      $("testnet-fields").classList.toggle("hidden", isMainnet);
+      $("mainnet-fields").classList.toggle("hidden", !isMainnet);
+    }
+
+    function applySettings(view) {
+      $("data-dir").textContent = view.data_dir;
+      $("core-url").textContent = view.core_url;
+      $("network").value = view.network;
+      $("bootstrap_urls").value = (view.bootstrap_urls || []).join("\n");
+      $("max_memory_gb").value = view.max_memory_gb;
+      $("p2p_listen_port").value = view.p2p_listen_port;
+      $("node_http_port").value = view.node_http_port;
+      $("core_tcp_port").value = view.core_tcp_port;
+      toggleNetworkFields(view.network);
+      if (!view.node_key_set) {
+        $("node_key").placeholder = "Paste operator node key here";
+      } else {
+        $("node_key").placeholder = "(key saved — paste to replace)";
+      }
+      if (!view.wallet_address_set) {
+        $("wallet_address").placeholder = "0x… or your payout address";
+      } else {
+        $("wallet_address").placeholder = "(address saved — type to replace)";
+      }
+    }
+
+    function applyMiningStatus(status) {
+      const badge = $("mining-badge");
+      if (status.mining) {
+        badge.textContent = "running";
+        badge.className = "badge ok";
+      } else {
+        badge.textContent = "stopped";
+        badge.className = "badge off";
+      }
+      const netBadge = $("network-badge");
+      netBadge.textContent = status.network || "—";
+      netBadge.className = status.network === "mainnet" ? "badge warn" : "badge off";
+      $("core-status").textContent = status.core_running ? "running" : "stopped";
+      $("node-status").textContent = status.node_running ? "running" : "stopped";
+      $("status-message").textContent = status.message || "";
+    }
+
+    async function refresh() {
+      const data = await api("/api/status");
+      applyMiningStatus(data.mining);
+      applySettings(data.settings);
+    }
+
+    async function refreshNodeStatus() {
+      try {
+        const data = await api("/api/node-status");
+        $("node-json").textContent = JSON.stringify(data, null, 2);
+      } catch (err) {
+        $("node-json").textContent = err.message;
+      }
+    }
+
+    $("network").addEventListener("change", (e) => {
+      const network = e.target.value;
+      toggleNetworkFields(network);
+      const current = $("bootstrap_urls").value.split("\n").map(s => s.trim()).filter(Boolean);
+      const defaults = BOOTSTRAP_DEFAULTS[network];
+      const other = network === "mainnet" ? BOOTSTRAP_DEFAULTS.testnet : BOOTSTRAP_DEFAULTS.mainnet;
+      if (current.length === 0 || current.join("\n") === other.join("\n")) {
+        $("bootstrap_urls").value = defaults.join("\n");
+      }
+    });
+
+    $("settings-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      message("");
+      try {
+        const network = $("network").value;
+        const payload = {
+          network,
+          bootstrap_urls: $("bootstrap_urls").value.split("\n").map(s => s.trim()).filter(Boolean),
+          max_memory_gb: Number($("max_memory_gb").value),
+          p2p_listen_port: Number($("p2p_listen_port").value),
+          node_http_port: Number($("node_http_port").value),
+          core_tcp_port: Number($("core_tcp_port").value),
+        };
+        const nodeKey = $("node_key").value.trim();
+        const wallet = $("wallet_address").value.trim();
+        if (nodeKey) payload.node_key = nodeKey;
+        if (wallet) payload.wallet_address = wallet;
+        const view = await api("/api/settings", { method: "PUT", body: JSON.stringify(payload) });
+        applySettings(view);
+        $("node_key").value = "";
+        $("wallet_address").value = "";
+        message("Settings saved.");
+      } catch (err) {
+        message(err.message, true);
+      }
+    });
+
+    $("btn-start").addEventListener("click", async () => {
+      message("");
+      try {
+        const data = await api("/api/mining/start", { method: "POST" });
+        applyMiningStatus(data.status);
+        message(data.status.message || "Mining started.");
+        refreshNodeStatus();
+      } catch (err) {
+        message(err.message, true);
+      }
+    });
+
+    $("btn-stop").addEventListener("click", async () => {
+      message("");
+      try {
+        const data = await api("/api/mining/stop", { method: "POST" });
+        applyMiningStatus(data.status);
+        $("node-json").textContent = "Not running";
+        message("Mining stopped.");
+      } catch (err) {
+        message(err.message, true);
+      }
+    });
+
+    $("btn-refresh").addEventListener("click", () => refreshNodeStatus());
+
+    refresh().catch((err) => message(err.message, true));
+    setInterval(() => refresh().catch(() => {}), 5000);
+  </script>
+</body>
+</html>
