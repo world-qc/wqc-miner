@@ -1,0 +1,162 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag (e.g. v0.1.0)"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_TARGET_DIR: ${{ github.workspace }}/target
+  CARGO_INCREMENTAL: 0
+
+jobs:
+  build:
+    name: ${{ matrix.artifact_name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            artifact_name: wqc-miner-windows-x64
+            archive_ext: zip
+            miner_bin: wqc-miner.exe
+            core_bin: wqc-core.exe
+            node_bin: wqc-node.exe
+          - os: macos-14
+            target: aarch64-apple-darwin
+            artifact_name: wqc-miner-mac-arm64
+            archive_ext: dmg
+            miner_bin: wqc-miner
+            core_bin: wqc-core
+            node_bin: wqc-node
+
+    steps:
+      - name: Checkout wqc-miner
+        uses: actions/checkout@v4
+        with:
+          path: wqc-miner
+
+      - name: Checkout wqc-core
+        uses: actions/checkout@v4
+        with:
+          repository: world-qc/wqc-core
+          path: wqc-core
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Checkout wqc-node
+        uses: actions/checkout@v4
+        with:
+          repository: world-qc/wqc-node
+          path: wqc-node
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Checkout wqc-stark-engine
+        uses: actions/checkout@v4
+        with:
+          repository: world-qc/wqc-stark-engine
+          path: wqc-stark-engine
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.95"
+          targets: ${{ matrix.target }}
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            wqc-miner
+            wqc-core
+            wqc-node
+
+      - name: Build wqc-core (webgpu)
+        working-directory: wqc-core
+        run: cargo build --release --locked --features webgpu
+
+      - name: Build wqc-node
+        working-directory: wqc-node
+        run: cargo build --release --locked
+
+      - name: Build wqc-miner
+        working-directory: wqc-miner
+        run: cargo build --release --locked
+
+      - name: Stage bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          STAGING="${{ github.workspace }}/dist/${{ matrix.artifact_name }}"
+          mkdir -p "${STAGING}/bin"
+          cp "${CARGO_TARGET_DIR}/release/${{ matrix.miner_bin }}" "${STAGING}/"
+          cp "${CARGO_TARGET_DIR}/release/${{ matrix.core_bin }}" "${STAGING}/bin/"
+          cp "${CARGO_TARGET_DIR}/release/${{ matrix.node_bin }}" "${STAGING}/bin/"
+          cp wqc-miner/LICENSE wqc-miner/settings.toml.example "${STAGING}/"
+          cp wqc-miner/README.md "${STAGING}/"
+
+      - name: Package zip (Windows)
+        if: matrix.archive_ext == 'zip'
+        shell: pwsh
+        run: |
+          Compress-Archive -Path "dist/${{ matrix.artifact_name }}" -DestinationPath "dist/${{ matrix.artifact_name }}.zip"
+
+      - name: Package dmg (macOS)
+        if: matrix.archive_ext == 'dmg'
+        run: |
+          hdiutil create \
+            -volname "WQC Miner" \
+            -srcfolder "dist/${{ matrix.artifact_name }}" \
+            -ov -format UDZO \
+            "dist/${{ matrix.artifact_name }}.dmg"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: dist/${{ matrix.artifact_name }}.${{ matrix.archive_ext }}
+          if-no-files-found: error
+
+  release:
+    name: Publish GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+
+      - name: Resolve release tag
+        id: tag
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "value=${{ inputs.tag }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag.outputs.value }}
+          name: ${{ steps.tag.outputs.value }}
+          generate_release_notes: true
+          files: |
+            dist/wqc-miner-windows-x64/wqc-miner-windows-x64.zip
+            dist/wqc-miner-mac-arm64/wqc-miner-mac-arm64.dmg
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

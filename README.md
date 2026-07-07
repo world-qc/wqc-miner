@@ -100,3 +100,24 @@ On Windows, `wqc-core` reads `WQC_CORE_TCP_PORT` (default `3000`; miner defaults
 ## License
 
 GPL-3.0 — see [LICENSE](LICENSE).
+
+## CI / Release
+
+| Workflow | Trigger | Purpose |
+|----------|---------|---------|
+| [`.github/workflows/ci.yml`](.github/workflows/ci.yml) | push / PR to `main` | `cargo build` + `cargo test` (wqc-miner only) |
+| [`.github/workflows/release.yml`](.github/workflows/release.yml) | tag `v*` or manual dispatch | Build bundled zip (Windows) / dmg (macOS) and upload to GitHub Releases |
+
+Release builds check out sibling repos (`wqc-core`, `wqc-node`, `wqc-stark-engine`) into the same workspace so `wqc-core`'s `[patch]` for `wqc-stark-engine` resolves. `wqc-core` is built with `--features webgpu`.
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+Artifacts:
+
+- `wqc-miner-windows-x64.zip` — `wqc-miner.exe` + `bin/wqc-core.exe` + `bin/wqc-node.exe`
+- `wqc-miner-mac-arm64.dmg` — same layout for Apple Silicon
+
+Code signing (Windows Authenticode / Apple notarization) is not included yet.
