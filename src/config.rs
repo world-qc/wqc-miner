@@ -16,6 +16,28 @@ impl Default for Network {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum TnBackend {
+    Cpu,
+    WebGpu,
+}
+
+impl Default for TnBackend {
+    fn default() -> Self {
+        Self::Cpu
+    }
+}
+
+impl TnBackend {
+    pub fn as_env(&self) -> &'static str {
+        match self {
+            Self::Cpu => "cpu",
+            Self::WebGpu => "webgpu",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MinerSettings {
     /// Active network (testnet uses node key; mainnet uses wallet address).
@@ -37,6 +59,10 @@ pub struct MinerSettings {
     /// Payout wallet address (mainnet). Mock-only for now.
     #[serde(default)]
     pub wallet_address: String,
+
+    /// Tensor-network execution backend for wqc-core (`WQC_TN_BACKEND`).
+    #[serde(default)]
+    pub tn_backend: TnBackend,
 
     /// Memory cap passed to wqc-core via WQC_MAX_MEMORY_GB.
     #[serde(default = "default_max_memory_gb")]
@@ -63,6 +89,7 @@ impl Default for MinerSettings {
             bootstrap_urls: default_bootstrap_urls(),
             node_key: String::new(),
             wallet_address: String::new(),
+            tn_backend: TnBackend::default(),
             max_memory_gb: default_max_memory_gb(),
             p2p_listen_port: default_p2p_listen_port(),
             node_http_port: default_node_http_port(),
@@ -169,6 +196,7 @@ pub struct SettingsUpdate {
     #[serde(alias = "testnet_node_key")]
     pub node_key: Option<String>,
     pub wallet_address: Option<String>,
+    pub tn_backend: Option<TnBackend>,
     pub max_memory_gb: Option<f64>,
     pub p2p_listen_port: Option<u16>,
     pub node_http_port: Option<u16>,
@@ -191,6 +219,9 @@ impl SettingsUpdate {
         }
         if let Some(v) = self.wallet_address {
             settings.wallet_address = v;
+        }
+        if let Some(v) = self.tn_backend {
+            settings.tn_backend = v;
         }
         if let Some(v) = self.max_memory_gb {
             settings.max_memory_gb = v;
@@ -215,6 +246,7 @@ pub struct SettingsView {
     pub bootstrap_urls: Vec<String>,
     pub node_key_set: bool,
     pub wallet_address_set: bool,
+    pub tn_backend: TnBackend,
     pub max_memory_gb: f64,
     pub p2p_listen_port: u16,
     pub node_http_port: u16,
@@ -232,6 +264,7 @@ impl SettingsView {
             bootstrap_urls: settings.bootstrap_urls.clone(),
             node_key_set: !settings.node_key.trim().is_empty(),
             wallet_address_set: !settings.wallet_address.trim().is_empty(),
+            tn_backend: settings.tn_backend,
             max_memory_gb: settings.max_memory_gb,
             p2p_listen_port: settings.p2p_listen_port,
             node_http_port: settings.node_http_port,

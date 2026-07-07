@@ -112,6 +112,7 @@
         · Mining: <span id="mining-badge" class="badge off">stopped</span>
       </p>
       <p class="meta">Core: <span id="core-status">—</span> · Node: <span id="node-status">—</span></p>
+      <p class="meta" id="tn-backend-status">TN backend: —</p>
       <p class="meta">Data dir: <span id="data-dir">—</span></p>
       <p class="meta" id="status-message"></p>
       <div class="actions" style="margin-top: 1rem;">
@@ -146,6 +147,15 @@
 
         <label for="bootstrap_urls">Bootstrap URLs (one per line)</label>
         <textarea id="bootstrap_urls"></textarea>
+
+        <div id="tn-backend-panel">
+          <label for="tn_backend">TN backend (wqc-core)</label>
+          <select id="tn_backend">
+            <option value="cpu">CPU</option>
+            <option value="webgpu">GPU (WebGPU)</option>
+          </select>
+          <p class="meta">Uses GPU when available; falls back to CPU automatically. Applies on next start.</p>
+        </div>
 
         <div class="row">
           <div>
@@ -209,6 +219,24 @@
       const isMainnet = network === "mainnet";
       $("testnet-fields").classList.toggle("hidden", isMainnet);
       $("mainnet-fields").classList.toggle("hidden", !isMainnet);
+      $("tn-backend-panel").classList.toggle("hidden", isMainnet);
+    }
+
+    function formatTnBackendLine(mining, settings, coreTn) {
+      if (settings.mainnet_mock) return "TN backend: n/a (mainnet mock)";
+      const requested = settings.tn_backend || "cpu";
+      if (!mining.core_running) {
+        return `TN backend: ${requested} (configured — starts with core)`;
+      }
+      if (coreTn) {
+        const active = coreTn.active || requested;
+        const note = coreTn.note ? ` — ${coreTn.note}` : "";
+        if (active !== requested) {
+          return `TN backend: ${requested} → ${active} (fallback)${note}`;
+        }
+        return `TN backend: ${active}${note}`;
+      }
+      return `TN backend: ${requested} (core starting…)`;
     }
 
     function applySettings(view) {
@@ -220,6 +248,7 @@
       $("p2p_listen_port").value = view.p2p_listen_port;
       $("node_http_port").value = view.node_http_port;
       $("core_tcp_port").value = view.core_tcp_port;
+      $("tn_backend").value = view.tn_backend || "cpu";
       toggleNetworkFields(view.network);
       if (!view.node_key_set) {
         $("node_key").placeholder = "Paste operator node key here";
@@ -254,6 +283,11 @@
       const data = await api("/api/status");
       applyMiningStatus(data.mining);
       applySettings(data.settings);
+      $("tn-backend-status").textContent = formatTnBackendLine(
+        data.mining,
+        data.settings,
+        data.core_tn
+      );
     }
 
     async function refreshNodeStatus() {
@@ -283,6 +317,7 @@
         const network = $("network").value;
         const payload = {
           network,
+          tn_backend: $("tn_backend").value,
           bootstrap_urls: $("bootstrap_urls").value.split("\n").map(s => s.trim()).filter(Boolean),
           max_memory_gb: Number($("max_memory_gb").value),
           p2p_listen_port: Number($("p2p_listen_port").value),

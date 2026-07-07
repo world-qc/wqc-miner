@@ -46,9 +46,11 @@ async fn api_status(State(state): State<AdminState>) -> Json<serde_json::Value> 
     let supervisor = state.supervisor.read().await;
     let settings = state.settings.read().await;
     let mining = supervisor.status();
+    let core_tn = supervisor.core_tn_status().await;
     Json(serde_json::json!({
         "mining": mining,
         "settings": SettingsView::from_settings(&settings, &state.layout),
+        "core_tn": core_tn,
     }))
 }
 

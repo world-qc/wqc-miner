@@ -1,0 +1,44 @@
+# wqc-miner settings (copy to your data directory as settings.toml)
+#
+# Default data dir:
+#   macOS:   ~/Library/Application Support/io.world-qc.wqc-miner/
+#   Linux:   ~/.local/share/wqc-miner/  (via directories crate)
+#   Windows: %APPDATA%\io.world-qc.wqc-miner\
+#
+# Or override: wqc-miner --data-dir /path/to/data
+#
+# On first launch, wqc-miner creates settings.toml with these defaults if missing.
+# The admin UI at http://127.0.0.1:3000 can edit all fields except secrets display.
+
+# testnet | mainnet
+network = "testnet"
+
+# Local admin UI port (also overridable: wqc-miner --admin-port 3000)
+admin_port = 3000
+
+# Orchestrator P2P bootstrap URLs (one per line in the UI; array here)
+bootstrap_urls = [
+    "https://testnet.world-qc.io/api/v1/p2p/bootstrap",
+]
+
+# Testnet: dashboard operator node key (WQC_TESTNET_NODE_KEY). Leave empty until set in UI.
+node_key = ""
+
+# Mainnet: payout wallet address (mock-only for now)
+wallet_address = ""
+
+# wqc-core tensor-network backend: cpu | webgpu
+# webgpu requires wqc-core built with --features webgpu; falls back to cpu if unavailable
+tn_backend = "cpu"
+
+# Memory budget for wqc-core / wqc-node (GiB)
+max_memory_gb = 16.0
+
+# wqc-node libp2p listen port
+p2p_listen_port = 4002
+
+# wqc-node HTTP API port (/health, /status)
+node_http_port = 8080
+
+# wqc-core TCP port when WQC_CONNECTION_MODE=tcp (Windows). Unix uses a socket in data dir.
+core_tcp_port = 13000

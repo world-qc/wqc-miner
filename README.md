@@ -23,10 +23,17 @@ Override with `--data-dir`.
 
 Contents:
 
-- `settings.toml` — network, bootstrap URLs, ports, credentials
+- `settings.toml` — network, bootstrap URLs, ports, credentials (see [`settings.toml.example`](settings.toml.example))
 - `keys/node_private_key.b64` — auto-generated libp2p key
 - `wqc-core.sock` — Unix socket (macOS/Linux only)
 - `node.db` — SQLite state for `wqc-node`
+
+On first launch, `settings.toml` is created automatically with defaults. To pre-seed or edit by hand, copy the example:
+
+```bash
+mkdir -p "$HOME/.local/share/wqc-miner"   # Linux example
+cp settings.toml.example "$HOME/.local/share/wqc-miner/settings.toml"
+```
 
 ## Binary layout (release)
 
@@ -75,6 +82,7 @@ On Windows, `wqc-core` reads `WQC_CORE_TCP_PORT` (default `3000`; miner defaults
 | `WQC_BOOTSTRAP_URLS` | settings (comma-separated) |
 | `WQC_CORE_URL` | derived from data dir / TCP port |
 | `WQC_MAX_MEMORY_GB` | settings |
+| `WQC_TN_BACKEND` | settings (`cpu` or `webgpu`) |
 | `WQC_P2P_LISTEN_PORT` | settings |
 | `WQC_HTTP_PORT` | settings |
 | `WQC_DATABASE_URL` | `sqlite:{data_dir}/node.db` |

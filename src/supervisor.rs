@@ -5,7 +5,7 @@ use anyhow::{bail, Context};
 use tokio::process::{Child, Command};
 use tokio::time::sleep;
 
-use crate::config::{MinerSettings, Network};
+use crate::config::{MinerSettings, Network, TnBackend};
 use crate::data_dir::DataLayout;
 use crate::paths::BinaryPaths;
 
@@ -27,6 +27,7 @@ pub struct MiningStatus {
     pub core_running: bool,
     pub node_running: bool,
     pub network: Network,
+    pub tn_backend: TnBackend,
     pub message: Option<String>,
 }
 
@@ -91,6 +92,7 @@ impl Supervisor {
             core_running,
             node_running,
             network: self.settings.network,
+            tn_backend: self.settings.tn_backend,
             message,
         }
     }
@@ -168,6 +170,26 @@ impl Supervisor {
         Ok(body)
     }
 
+    /// Live TN backend probe from wqc-core `/sysinfo` (when core is running).
+    pub async fn core_tn_status(&self) -> Option<serde_json::Value> {
+        if self.core_child.is_none() {
+            return None;
+        }
+
+        let url = core_http_url(&self.settings, "/sysinfo");
+        let client = build_core_client(&self.layout).ok()?;
+        let response = client.get(&url).send().await.ok()?;
+        if !response.status().is_success() {
+            return None;
+        }
+        let body = response.json::<serde_json::Value>().await.ok()?;
+        Some(serde_json::json!({
+            "requested": body.get("tn_backend_requested").and_then(|v| v.as_str()).unwrap_or("cpu"),
+            "active": body.get("tn_backend_active").and_then(|v| v.as_str()).unwrap_or("cpu"),
+            "note": body.get("tn_backend_note").and_then(|v| v.as_str()),
+        }))
+    }
+
     async fn start_core(&mut self) -> anyhow::Result<()> {
         self.ensure_binaries()?;
         let core_bin = self.binaries.as_ref().expect("binaries ensured").core.clone();
@@ -183,7 +205,8 @@ impl Supervisor {
             .env(
                 "WQC_MAX_MEMORY_GB",
                 format!("{}", self.settings.max_memory_gb),
-            );
+            )
+            .env("WQC_TN_BACKEND", self.settings.tn_backend.as_env());
 
         if cfg!(unix) {
             cmd.env("WQC_CONNECTION_MODE", "uds");
@@ -229,28 +252,11 @@ impl Supervisor {
     }
 
     async fn wait_for_core_health(&self) -> anyhow::Result<()> {
-        let health_url = if cfg!(unix) {
-            format!(
-                "http://localhost/health",
-            )
-        } else {
-            format!(
-                "http://127.0.0.1:{}/health",
-                self.settings.core_tcp_port
-            )
-        };
-
-        let client = build_core_health_client(&self.layout)?;
+        let health_url = core_http_url(&self.settings, "/health");
+        let client = build_core_client(&self.layout)?;
 
         for attempt in 1..=30 {
-            let result = if cfg!(unix) {
-                client
-                    .get(&health_url)
-                    .send()
-                    .await
-            } else {
-                client.get(&health_url).send().await
-            };
+            let result = client.get(&health_url).send().await;
             match result {
                 Ok(resp) if resp.status().is_success() => {
                     tracing::info!("wqc-core health check OK");
@@ -273,8 +279,16 @@ impl Supervisor {
     }
 }
 
+fn core_http_url(settings: &MinerSettings, path: &str) -> String {
+    if cfg!(unix) {
+        format!("http://localhost{path}")
+    } else {
+        format!("http://127.0.0.1:{}{path}", settings.core_tcp_port)
+    }
+}
+
 #[cfg(unix)]
-fn build_core_health_client(layout: &DataLayout) -> anyhow::Result<reqwest::Client> {
+fn build_core_client(layout: &DataLayout) -> anyhow::Result<reqwest::Client> {
     let socket_path = layout.core_socket_path().to_string_lossy().to_string();
     reqwest::Client::builder()
         .timeout(Duration::from_secs(3))
@@ -284,7 +298,7 @@ fn build_core_health_client(layout: &DataLayout) -> anyhow::Result<reqwest::Clie
 }
 
 #[cfg(not(unix))]
-fn build_core_health_client(_layout: &DataLayout) -> anyhow::Result<reqwest::Client> {
+fn build_core_client(_layout: &DataLayout) -> anyhow::Result<reqwest::Client> {
     reqwest::Client::builder()
         .timeout(Duration::from_secs(3))
         .build()
