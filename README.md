@@ -117,7 +117,10 @@ git push origin v0.1.0
 
 Artifacts:
 
-- `wqc-miner-windows-x64.zip` — `wqc-miner.exe` + `bin/wqc-core.exe` + `bin/wqc-node.exe`
-- `wqc-miner-mac-arm64.dmg` — same layout for Apple Silicon
+- `wqc-miner-windows-x64.zip` — x86_64 Windows
+- `wqc-miner-windows-arm64.zip` — ARM64 Windows (Snapdragon / ARM PCs)
+- `wqc-miner-mac-universal.dmg` — macOS Universal Binary (Apple Silicon + Intel)
+
+Each bundle contains `wqc-miner` + `bin/wqc-core` + `bin/wqc-node`.
 
 Code signing (Windows Authenticode / Apple notarization) is not included yet.
