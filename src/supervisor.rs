@@ -2,6 +2,7 @@ use std::process::Stdio;
 use std::time::Duration;
 
 use anyhow::{bail, Context};
+use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::{Child, Command};
 use tokio::time::sleep;
 
@@ -217,7 +218,13 @@ impl Supervisor {
         }
 
         tracing::info!("starting wqc-core: {}", core_bin.display());
-        let child = cmd.spawn().context("spawn wqc-core")?;
+        let mut child = cmd.spawn().context("spawn wqc-core")?;
+        self.spawn_log_task(
+            "core",
+            child.stdout.take(),
+            child.stderr.take(),
+            self.layout.core_log_path(),
+        );
         self.core_child = Some(child);
         Ok(())
     }
@@ -246,7 +253,13 @@ impl Supervisor {
             .env("WQC_DATABASE_URL", db_url);
 
         tracing::info!("starting wqc-node: {}", node_bin.display());
-        let child = cmd.spawn().context("spawn wqc-node")?;
+        let mut child = cmd.spawn().context("spawn wqc-node")?;
+        self.spawn_log_task(
+            "node",
+            child.stdout.take(),
+            child.stderr.take(),
+            self.layout.node_log_path(),
+        );
         self.node_child = Some(child);
         Ok(())
     }
@@ -276,6 +289,62 @@ impl Supervisor {
             sleep(Duration::from_secs(1)).await;
         }
         bail!("wqc-core did not become healthy within 30 seconds");
+    }
+
+    fn spawn_log_task(
+        &self,
+        name: &str,
+        stdout: Option<tokio::process::ChildStdout>,
+        stderr: Option<tokio::process::ChildStderr>,
+        path: std::path::PathBuf,
+    ) {
+        let name = name.to_string();
+        // Ignore errors in log task; they are best-effort.
+        tokio::spawn(async move {
+            if let Some(parent) = path.parent() {
+                let _ = tokio::fs::create_dir_all(parent).await;
+            }
+            let file = match tokio::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(&path)
+                .await
+            {
+                Ok(f) => f,
+                Err(e) => {
+                    tracing::warn!(
+                        target: "wqc-miner",
+                        "failed to open log file {} for {}: {}",
+                        path.display(),
+                        name,
+                        e
+                    );
+                    return;
+                }
+            };
+            let mut writer = file;
+
+            if let Some(out) = stdout {
+                let mut reader = BufReader::new(out).lines();
+                while let Ok(Some(line)) = reader.next_line().await {
+                    let _ = tokio::io::AsyncWriteExt::write_all(
+                        &mut writer,
+                        format!("[{}][stdout] {}\n", name, line).as_bytes(),
+                    )
+                    .await;
+                }
+            }
+            if let Some(err) = stderr {
+                let mut reader = BufReader::new(err).lines();
+                while let Ok(Some(line)) = reader.next_line().await {
+                    let _ = tokio::io::AsyncWriteExt::write_all(
+                        &mut writer,
+                        format!("[{}][stderr] {}\n", name, line).as_bytes(),
+                    )
+                    .await;
+                }
+            }
+        });
     }
 }
 

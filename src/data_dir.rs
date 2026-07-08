@@ -42,4 +42,12 @@ impl DataLayout {
     pub fn core_socket_path(&self) -> PathBuf {
         self.root.join("wqc-core.sock")
     }
+
+    pub fn core_log_path(&self) -> PathBuf {
+        self.root.join("logs").join("core.log")
+    }
+
+    pub fn node_log_path(&self) -> PathBuf {
+        self.root.join("logs").join("node.log")
+    }
 }
