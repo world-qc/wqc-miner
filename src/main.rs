@@ -3,6 +3,7 @@ mod cli;
 mod config;
 mod data_dir;
 mod keys;
+mod memory_budget;
 mod paths;
 mod supervisor;
 

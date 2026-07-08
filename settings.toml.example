@@ -31,8 +31,10 @@ wallet_address = ""
 # webgpu requires wqc-core built with --features webgpu; falls back to cpu if unavailable
 tn_backend = "cpu"
 
-# Memory budget for wqc-core / wqc-node (GiB)
-max_memory_gb = 16.0
+# Memory budget for wqc-core / wqc-node (GiB).
+# On first launch: total host RAM minus reserve (1 GiB if <16 GiB, else 2 GiB).
+# Example for a 16 GiB host:
+max_memory_gb = 14.0
 
 # wqc-node libp2p listen port
 p2p_listen_port = 4002
