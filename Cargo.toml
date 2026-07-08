@@ -23,6 +23,7 @@ tower-http = { version = "0.5", features = ["cors", "fs"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 which = "7.0"
+sysinfo = "0.30"
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"

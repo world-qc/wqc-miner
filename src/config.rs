@@ -1,5 +1,6 @@
 use anyhow::Context;
 use serde::{Deserialize, Serialize};
+use sysinfo::System;
 
 use crate::data_dir::DataLayout;
 
@@ -114,7 +115,13 @@ pub fn default_bootstrap_urls_for(network: &Network) -> Vec<String> {
 }
 
 fn default_max_memory_gb() -> f64 {
-    16.0
+    // Default to 80% of host physical RAM (integer GiB), with a floor of 1 GiB.
+    // Falls back to 16.0 if host memory cannot be detected.
+    let (total_gib, max_gib) = host_memory_limits_gib();
+    max_gib
+        .or(total_gib)
+        .map(|gib| gib.max(1) as f64)
+        .unwrap_or(16.0)
 }
 
 fn default_p2p_listen_port() -> u16 {
@@ -223,7 +230,18 @@ impl SettingsUpdate {
         if let Some(v) = self.tn_backend {
             settings.tn_backend = v;
         }
-        if let Some(v) = self.max_memory_gb {
+        if let Some(mut v) = self.max_memory_gb {
+            // Clamp to sensible host-based limits: (0, host_max_gib].
+            let (_total_gib, max_gib) = host_memory_limits_gib();
+            if let Some(max) = max_gib {
+                let max_f = max as f64;
+                if v > max_f {
+                    v = max_f;
+                }
+            }
+            if v <= 0.0 {
+                v = 1.0;
+            }
             settings.max_memory_gb = v;
         }
         if let Some(v) = self.p2p_listen_port {
@@ -254,10 +272,13 @@ pub struct SettingsView {
     pub core_url: String,
     pub data_dir: String,
     pub mainnet_mock: bool,
+    pub host_total_memory_gb: Option<u64>,
+    pub host_max_memory_gb: Option<u64>,
 }
 
 impl SettingsView {
     pub fn from_settings(settings: &MinerSettings, layout: &DataLayout) -> Self {
+        let (host_total_gib, host_max_gib) = host_memory_limits_gib();
         Self {
             network: settings.network,
             admin_port: settings.admin_port,
@@ -272,6 +293,27 @@ impl SettingsView {
             core_url: settings.core_url(layout),
             data_dir: layout.root.display().to_string(),
             mainnet_mock: settings.is_mainnet_mock(),
+            host_total_memory_gb: host_total_gib,
+            host_max_memory_gb: host_max_gib,
         }
     }
+}
+
+/// Returns (total_gib, max_recommended_gib) based on host physical memory.
+/// max_recommended_gib is floor(total * 0.8).
+fn host_memory_limits_gib() -> (Option<u64>, Option<u64>) {
+    let mut sys = System::new();
+    sys.refresh_memory();
+    // total_memory is in bytes on sysinfo >= 0.30
+    let total_bytes = sys.total_memory();
+    if total_bytes == 0 {
+        return (None, None);
+    }
+    let gib = total_bytes / (1024 * 1024 * 1024);
+    if gib == 0 {
+        return (None, None);
+    }
+    let max = ((gib as f64) * 0.8).floor() as u64;
+    let max = max.max(1).min(gib);
+    (Some(gib), Some(max))
 }

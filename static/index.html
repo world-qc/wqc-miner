@@ -245,6 +245,11 @@
       $("network").value = view.network;
       $("bootstrap_urls").value = (view.bootstrap_urls || []).join("\n");
       $("max_memory_gb").value = view.max_memory_gb;
+      if (view.host_max_memory_gb) {
+        const input = $("max_memory_gb");
+        input.max = String(view.host_max_memory_gb);
+        input.min = "1";
+      }
       $("p2p_listen_port").value = view.p2p_listen_port;
       $("node_http_port").value = view.node_http_port;
       $("core_tcp_port").value = view.core_tcp_port;
