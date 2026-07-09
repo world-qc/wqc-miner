@@ -103,7 +103,9 @@ async fn api_stop(State(state): State<AdminState>) -> Result<Json<serde_json::Va
     Ok(Json(serde_json::json!({ "ok": true, "status": status })))
 }
 
-async fn api_node_status(State(state): State<AdminState>) -> Result<Json<serde_json::Value>, ApiError> {
+async fn api_node_status(
+    State(state): State<AdminState>,
+) -> Result<Json<serde_json::Value>, ApiError> {
     let supervisor = state.supervisor.read().await;
     let body = supervisor
         .node_status_json()

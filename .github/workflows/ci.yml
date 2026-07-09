@@ -22,9 +22,16 @@ jobs:
         uses: dtolnay/rust-toolchain@master
         with:
           toolchain: "1.95"
+          components: rustfmt, clippy
 
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
+
+      - name: cargo fmt
+        run: cargo fmt --all -- --check
+
+      - name: cargo clippy
+        run: cargo clippy --all-targets --locked -- -D warnings
 
       - name: cargo build
         run: cargo build --locked --verbose

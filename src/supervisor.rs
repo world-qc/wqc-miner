@@ -57,12 +57,8 @@ impl Supervisor {
             return Ok(());
         }
         self.binaries = Some(
-            BinaryPaths::try_resolve(self.bin_dir_override.as_deref())?
-                .ok_or_else(|| {
-                    anyhow::anyhow!(
-                        "wqc-core / wqc-node not found — set --bin-dir or WQC_MINER_BIN_DIR"
-                    )
-                })?,
+            BinaryPaths::resolve(self.bin_dir_override.as_deref())
+                .context("wqc-core / wqc-node not found — set --bin-dir or WQC_MINER_BIN_DIR")?,
         );
         Ok(())
     }
@@ -152,10 +148,7 @@ impl Supervisor {
         if self.node_child.is_none() {
             bail!("wqc-node is not running");
         }
-        let url = format!(
-            "http://127.0.0.1:{}/status",
-            self.settings.node_http_port
-        );
+        let url = format!("http://127.0.0.1:{}/status", self.settings.node_http_port);
         let client = reqwest::Client::builder()
             .timeout(Duration::from_secs(5))
             .build()?;
@@ -173,9 +166,7 @@ impl Supervisor {
 
     /// Live TN backend probe from wqc-core `/sysinfo` (when core is running).
     pub async fn core_tn_status(&self) -> Option<serde_json::Value> {
-        if self.core_child.is_none() {
-            return None;
-        }
+        self.core_child.as_ref()?;
 
         let url = core_http_url(&self.settings, "/sysinfo");
         let client = build_core_client(&self.layout).ok()?;
@@ -193,7 +184,12 @@ impl Supervisor {
 
     async fn start_core(&mut self) -> anyhow::Result<()> {
         self.ensure_binaries()?;
-        let core_bin = self.binaries.as_ref().expect("binaries ensured").core.clone();
+        let core_bin = self
+            .binaries
+            .as_ref()
+            .expect("binaries ensured")
+            .core
+            .clone();
         let socket_path = self.layout.core_socket_path();
         if cfg!(unix) && socket_path.exists() {
             let _ = std::fs::remove_file(&socket_path);
@@ -231,7 +227,12 @@ impl Supervisor {
 
     async fn start_node(&mut self) -> anyhow::Result<()> {
         self.ensure_binaries()?;
-        let node_bin = self.binaries.as_ref().expect("binaries ensured").node.clone();
+        let node_bin = self
+            .binaries
+            .as_ref()
+            .expect("binaries ensured")
+            .node
+            .clone();
         let db_url = format!("sqlite:{}", self.layout.node_db_path().display());
         let mut cmd = Command::new(&node_bin);
         cmd.stdin(Stdio::null())
@@ -240,11 +241,11 @@ impl Supervisor {
             .env("WQC_NODE_PRIVATE_KEY", &self.node_private_key_b64)
             .env("WQC_TESTNET_NODE_KEY", &self.settings.node_key)
             .env("WQC_CORE_URL", self.settings.core_url(&self.layout))
+            .env("WQC_BOOTSTRAP_URLS", self.settings.bootstrap_urls_env())
             .env(
-                "WQC_BOOTSTRAP_URLS",
-                self.settings.bootstrap_urls_env(),
+                "WQC_MAX_MEMORY_GB",
+                format!("{}", self.settings.max_memory_gb),
             )
-            .env("WQC_MAX_MEMORY_GB", format!("{}", self.settings.max_memory_gb))
             .env(
                 "WQC_P2P_LISTEN_PORT",
                 self.settings.p2p_listen_port.to_string(),

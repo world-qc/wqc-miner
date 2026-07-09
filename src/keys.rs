@@ -22,10 +22,7 @@ pub fn ensure_node_private_key(layout: &DataLayout) -> anyhow::Result<String> {
     validate_private_key_b64(&private_seed_b64)?;
 
     std::fs::write(&path, format!("{private_seed_b64}\n"))?;
-    tracing::info!(
-        "generated new WQC node private key at {}",
-        path.display()
-    );
+    tracing::info!("generated new WQC node private key at {}", path.display());
     Ok(private_seed_b64)
 }
 

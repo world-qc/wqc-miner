@@ -97,6 +97,10 @@ On Windows, `wqc-core` reads `WQC_CORE_TCP_PORT` (default `3000`; miner defaults
 | POST | `/api/mining/stop` | Stop node → core (or mock) |
 | GET | `/api/node-status` | Proxy `wqc-node` `/status` (mock on mainnet) |
 
+## Contributing
+
+Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, coding guidelines, and the pull request process.
+
 ## License
 
 GPL-3.0 — see [LICENSE](LICENSE).
@@ -105,7 +109,7 @@ GPL-3.0 — see [LICENSE](LICENSE).
 
 | Workflow | Trigger | Purpose |
 |----------|---------|---------|
-| [`.github/workflows/ci.yml`](.github/workflows/ci.yml) | push / PR to `main` | `cargo build` + `cargo test` (wqc-miner only) |
+| [`.github/workflows/ci.yml`](.github/workflows/ci.yml) | push / PR to `main` | `cargo fmt`, `clippy`, `build`, `test` |
 | [`.github/workflows/release.yml`](.github/workflows/release.yml) | tag `v*` or manual dispatch | Build bundled zip (Windows) / dmg (macOS) and upload to GitHub Releases |
 
 Release builds check out sibling repos (`wqc-core`, `wqc-node`, `wqc-stark-engine`) into the same workspace so `wqc-core`'s `[patch]` for `wqc-stark-engine` resolves. `wqc-core` is built with `--features webgpu`.

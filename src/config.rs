@@ -4,30 +4,20 @@ use serde::{Deserialize, Serialize};
 use crate::data_dir::DataLayout;
 use crate::memory_budget::host_memory_limits_gib;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum Network {
+    #[default]
     Testnet,
     Mainnet,
 }
 
-impl Default for Network {
-    fn default() -> Self {
-        Self::Testnet
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum TnBackend {
+    #[default]
     Cpu,
     WebGpu,
-}
-
-impl Default for TnBackend {
-    fn default() -> Self {
-        Self::Cpu
-    }
 }
 
 impl TnBackend {
@@ -141,10 +131,10 @@ impl MinerSettings {
             settings.save(layout)?;
             return Ok(settings);
         }
-        let raw = std::fs::read_to_string(&path)
-            .with_context(|| format!("read {}", path.display()))?;
-        let settings: Self = toml::from_str(&raw)
-            .with_context(|| format!("parse {}", path.display()))?;
+        let raw =
+            std::fs::read_to_string(&path).with_context(|| format!("read {}", path.display()))?;
+        let settings: Self =
+            toml::from_str(&raw).with_context(|| format!("parse {}", path.display()))?;
         Ok(settings)
     }
 
