@@ -201,9 +201,102 @@ jobs:
           path: dist/wqc-miner-mac-universal.dmg
           if-no-files-found: error
 
+  build-linux:
+    name: ${{ matrix.artifact_name }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            artifact_name: wqc-miner-linux-x64
+            runner: ubuntu-latest
+          - target: aarch64-unknown-linux-gnu
+            artifact_name: wqc-miner-linux-arm64
+            runner: ubuntu-24.04-arm
+
+    steps:
+      - name: Checkout wqc-miner
+        uses: actions/checkout@v4
+        with:
+          path: wqc-miner
+
+      - name: Checkout wqc-core
+        uses: actions/checkout@v4
+        with:
+          repository: world-qc/wqc-core
+          path: wqc-core
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Checkout wqc-node
+        uses: actions/checkout@v4
+        with:
+          repository: world-qc/wqc-node
+          path: wqc-node
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Checkout wqc-stark-engine
+        uses: actions/checkout@v4
+        with:
+          repository: world-qc/wqc-stark-engine
+          path: wqc-stark-engine
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pkg-config libssl-dev
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.95"
+          targets: ${{ matrix.target }}
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            wqc-miner
+            wqc-core
+            wqc-node
+
+      - name: Build wqc-core (webgpu)
+        working-directory: wqc-core
+        run: cargo build --release --locked --features webgpu --target ${{ matrix.target }}
+
+      - name: Build wqc-node
+        working-directory: wqc-node
+        run: cargo build --release --locked --target ${{ matrix.target }}
+
+      - name: Build wqc-miner
+        working-directory: wqc-miner
+        run: cargo build --release --locked --target ${{ matrix.target }}
+
+      - name: Stage and package
+        shell: bash
+        run: |
+          set -euo pipefail
+          STAGING="dist/${{ matrix.artifact_name }}"
+          mkdir -p "${STAGING}/bin"
+          TARGET_DIR="${CARGO_TARGET_DIR}/${{ matrix.target }}/release"
+          cp "${TARGET_DIR}/wqc-miner" "${STAGING}/"
+          cp "${TARGET_DIR}/wqc-core" "${STAGING}/bin/"
+          cp "${TARGET_DIR}/wqc-node" "${STAGING}/bin/"
+          chmod +x "${STAGING}/wqc-miner" "${STAGING}/bin/wqc-core" "${STAGING}/bin/wqc-node"
+          cp wqc-miner/LICENSE wqc-miner/settings.toml.example wqc-miner/README.md "${STAGING}/"
+          tar -czf "dist/${{ matrix.artifact_name }}.tar.gz" -C dist "${{ matrix.artifact_name }}"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: dist/${{ matrix.artifact_name }}.tar.gz
+          if-no-files-found: error
+
   release:
     name: Publish GitHub Release
-    needs: [build-windows, build-mac-universal]
+    needs: [build-windows, build-mac-universal, build-linux]
     runs-on: ubuntu-latest
     steps:
       - name: Download artifacts
@@ -231,5 +324,7 @@ jobs:
             dist/wqc-miner-windows-x64/wqc-miner-windows-x64.zip
             dist/wqc-miner-windows-arm64/wqc-miner-windows-arm64.zip
             dist/wqc-miner-mac-universal/wqc-miner-mac-universal.dmg
+            dist/wqc-miner-linux-x64/wqc-miner-linux-x64.tar.gz
+            dist/wqc-miner-linux-arm64/wqc-miner-linux-arm64.tar.gz
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

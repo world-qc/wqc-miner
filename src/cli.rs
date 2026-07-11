@@ -14,4 +14,9 @@ pub struct Cli {
     /// Directory containing wqc-core and wqc-node binaries (default: ./bin next to this exe).
     #[arg(long)]
     pub bin_dir: Option<std::path::PathBuf>,
+
+    /// Start mining immediately after loading settings (overrides settings.toml `auto_start = false`).
+    /// Useful for headless Linux / systemd. Admin UI still listens on localhost.
+    #[arg(long, default_value_t = false)]
+    pub auto_start: bool,
 }

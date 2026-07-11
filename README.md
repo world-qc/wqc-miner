@@ -64,6 +64,38 @@ Open `http://127.0.0.1:3000`, pick **Testnet** or **Mainnet**, save settings, th
 
 For testnet, paste your operator node key from [testnet.world-qc.io](https://testnet.world-qc.io).
 
+## Headless / Linux auto-start
+
+The admin UI is plain HTTP on `127.0.0.1` — no display server is required. For servers and systemd:
+
+1. Copy `settings.toml.example` into the data directory and set `node_key` (testnet) or `wallet_address` (mainnet).
+2. Set `auto_start = true` in `settings.toml`, **or** pass `--auto-start`.
+3. Keep `tn_backend = "cpu"` on headless hosts unless you have a working GPU/WebGPU stack.
+
+If auto-start fails (missing key, missing binaries), the process stays up and the admin UI remains available so you can fix settings.
+
+Example systemd unit:
+
+```ini
+[Unit]
+Description=WQC Miner
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=wqc
+WorkingDirectory=/opt/wqc-miner
+ExecStart=/opt/wqc-miner/wqc-miner --auto-start
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Remote admin access: prefer an SSH tunnel (`ssh -L 3000:127.0.0.1:3000 …`) rather than binding the UI to `0.0.0.0`.
+
 ### Node ↔ core transport
 
 | OS | `wqc-core` mode | `WQC_CORE_URL` |
@@ -110,7 +142,7 @@ GPL-3.0 — see [LICENSE](LICENSE).
 | Workflow | Trigger | Purpose |
 |----------|---------|---------|
 | [`.github/workflows/ci.yml`](.github/workflows/ci.yml) | push / PR to `main` | `cargo fmt`, `clippy`, `build`, `test` |
-| [`.github/workflows/release.yml`](.github/workflows/release.yml) | tag `v*` or manual dispatch | Build bundled zip (Windows) / dmg (macOS) and upload to GitHub Releases |
+| [`.github/workflows/release.yml`](.github/workflows/release.yml) | tag `v*` or manual dispatch | Build bundled zip / dmg / tar.gz and upload to GitHub Releases |
 
 Release builds check out sibling repos (`wqc-core`, `wqc-node`, `wqc-stark-engine`) into the same workspace so `wqc-core`'s `[patch]` for `wqc-stark-engine` resolves. `wqc-core` is built with `--features webgpu`.
 
@@ -124,6 +156,8 @@ Artifacts:
 - `wqc-miner-windows-x64.zip` — x86_64 Windows
 - `wqc-miner-windows-arm64.zip` — ARM64 Windows (Snapdragon / ARM PCs)
 - `wqc-miner-mac-universal.dmg` — macOS Universal Binary (Apple Silicon + Intel)
+- `wqc-miner-linux-x64.tar.gz` — x86_64 Linux (`x86_64-unknown-linux-gnu`)
+- `wqc-miner-linux-arm64.tar.gz` — ARM64 Linux (`aarch64-unknown-linux-gnu`)
 
 Each bundle contains `wqc-miner` + `bin/wqc-core` + `bin/wqc-node`.
 

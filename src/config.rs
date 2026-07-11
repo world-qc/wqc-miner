@@ -70,6 +70,11 @@ pub struct MinerSettings {
     /// TCP port for wqc-core when WQC_CONNECTION_MODE=tcp (Windows).
     #[serde(default = "default_core_tcp_port")]
     pub core_tcp_port: u16,
+
+    /// When true, start mining as soon as the launcher is ready (headless / systemd).
+    /// Can also be forced with `--auto-start`. Admin UI still binds on localhost.
+    #[serde(default)]
+    pub auto_start: bool,
 }
 
 impl Default for MinerSettings {
@@ -85,6 +90,7 @@ impl Default for MinerSettings {
             p2p_listen_port: default_p2p_listen_port(),
             node_http_port: default_node_http_port(),
             core_tcp_port: default_core_tcp_port(),
+            auto_start: false,
         }
     }
 }
@@ -195,6 +201,7 @@ pub struct SettingsUpdate {
     pub p2p_listen_port: Option<u16>,
     pub node_http_port: Option<u16>,
     pub core_tcp_port: Option<u16>,
+    pub auto_start: Option<bool>,
 }
 
 impl SettingsUpdate {
@@ -239,6 +246,9 @@ impl SettingsUpdate {
         if let Some(v) = self.core_tcp_port {
             settings.core_tcp_port = v;
         }
+        if let Some(v) = self.auto_start {
+            settings.auto_start = v;
+        }
     }
 }
 
@@ -255,6 +265,7 @@ pub struct SettingsView {
     pub p2p_listen_port: u16,
     pub node_http_port: u16,
     pub core_tcp_port: u16,
+    pub auto_start: bool,
     pub core_url: String,
     pub data_dir: String,
     pub mainnet_mock: bool,
@@ -276,6 +287,7 @@ impl SettingsView {
             p2p_listen_port: settings.p2p_listen_port,
             node_http_port: settings.node_http_port,
             core_tcp_port: settings.core_tcp_port,
+            auto_start: settings.auto_start,
             core_url: settings.core_url(layout),
             data_dir: layout.root.display().to_string(),
             mainnet_mock: settings.is_mainnet_mock(),

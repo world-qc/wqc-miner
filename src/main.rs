@@ -57,6 +57,7 @@ async fn main() -> anyhow::Result<()> {
         ),
     }
 
+    let want_auto_start = cli.auto_start || settings.auto_start;
     let supervisor = Arc::new(RwLock::new(Supervisor::new(
         layout.clone(),
         settings.clone(),
@@ -64,6 +65,22 @@ async fn main() -> anyhow::Result<()> {
         binaries,
         cli.bin_dir.clone(),
     )));
+
+    if want_auto_start {
+        match supervisor.write().await.start().await {
+            Ok(status) => {
+                tracing::info!(
+                    mining = status.mining,
+                    "auto-start: mining started (admin UI still available)"
+                );
+            }
+            Err(err) => {
+                tracing::error!(
+                    "auto-start failed: {err:#} — admin UI remains available; fix settings and retry"
+                );
+            }
+        }
+    }
 
     let admin_port = settings.admin_port;
     let admin_state = AdminState {

@@ -44,3 +44,9 @@ node_http_port = 8080
 
 # wqc-core TCP port when WQC_CONNECTION_MODE=tcp (Windows). Unix uses a socket in data dir.
 core_tcp_port = 13000
+
+# Start mining as soon as the launcher is ready (no Start button click).
+# Useful on headless Linux / systemd. Admin UI still binds on 127.0.0.1.
+# Can also force with: wqc-miner --auto-start
+# Requires node_key (testnet) or wallet_address (mainnet) to be set.
+auto_start = false
