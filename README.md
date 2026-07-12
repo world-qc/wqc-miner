@@ -161,4 +161,12 @@ Artifacts:
 
 Each bundle contains `wqc-miner` + `bin/wqc-core` + `bin/wqc-node`.
 
-Code signing (Windows Authenticode / Apple notarization) is not included yet.
+### Provenance (no CA code signing)
+
+WQC does **not** ship commercial CA signatures (Sectigo, GlobalSign, Apple Developer ID, Authenticode). Release assets are attested with [GitHub Artifact Attestations](https://docs.github.com/en/actions/security-guides/using-artifact-attestations-to-establish-provenance-for-builds) (SLSA provenance via Sigstore) in the release workflow.
+
+```bash
+gh attestation verify wqc-miner-linux-x64.tar.gz -R world-qc/wqc-miner
+```
+
+OS SmartScreen / Gatekeeper may still warn; use attestation verify as the trust path.

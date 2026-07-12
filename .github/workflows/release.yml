@@ -298,6 +298,10 @@ jobs:
     name: Publish GitHub Release
     needs: [build-windows, build-mac-universal, build-linux]
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
     steps:
       - name: Download artifacts
         uses: actions/download-artifact@v4
@@ -314,12 +318,50 @@ jobs:
             echo "value=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Collect release asset paths
+        id: assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          paths=(
+            dist/wqc-miner-windows-x64/wqc-miner-windows-x64.zip
+            dist/wqc-miner-windows-arm64/wqc-miner-windows-arm64.zip
+            dist/wqc-miner-mac-universal/wqc-miner-mac-universal.dmg
+            dist/wqc-miner-linux-x64/wqc-miner-linux-x64.tar.gz
+            dist/wqc-miner-linux-arm64/wqc-miner-linux-arm64.tar.gz
+          )
+          for p in "${paths[@]}"; do
+            test -f "$p"
+          done
+          {
+            echo "subject_path<<EOF"
+            printf '%s\n' "${paths[@]}"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      # SLSA build provenance via Sigstore (public-good). No CA code-signing certs.
+      - name: Attest build provenance
+        uses: actions/attest@v4
+        with:
+          subject-path: ${{ steps.assets.outputs.subject_path }}
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.tag.outputs.value }}
           name: ${{ steps.tag.outputs.value }}
           generate_release_notes: true
+          body: |
+            ## Verify provenance
+
+            WQC does **not** use commercial CA code-signing certificates (Sectigo, GlobalSign, Apple Developer ID, etc.).
+            Release assets are bound to this workflow run with [GitHub Artifact Attestations](https://docs.github.com/en/actions/security-guides/using-artifact-attestations-to-establish-provenance-for-builds) (Sigstore).
+
+            ```bash
+            gh attestation verify wqc-miner-linux-x64.tar.gz -R world-qc/wqc-miner
+            ```
+
+            Replace the filename with the asset you downloaded. OS SmartScreen / Gatekeeper prompts may still appear; treat `gh attestation verify` as the trust path.
           files: |
             dist/wqc-miner-windows-x64/wqc-miner-windows-x64.zip
             dist/wqc-miner-windows-arm64/wqc-miner-windows-arm64.zip
