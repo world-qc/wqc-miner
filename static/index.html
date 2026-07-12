@@ -26,7 +26,7 @@
       line-height: 1.5;
     }
     main {
-      max-width: 720px;
+      max-width: 860px;
       margin: 0 auto;
       padding: 2rem 1.25rem 4rem;
     }
@@ -59,7 +59,7 @@
     textarea { min-height: 4rem; resize: vertical; }
     .row { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
     @media (max-width: 560px) { .row { grid-template-columns: 1fr; } }
-    .actions { display: flex; gap: 0.75rem; flex-wrap: wrap; }
+    .actions { display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: center; }
     button {
       border: none;
       border-radius: 6px;
@@ -90,6 +90,12 @@
       font-size: 0.8rem;
       max-height: 240px;
     }
+    #log-view {
+      max-height: 320px;
+      white-space: pre-wrap;
+      word-break: break-word;
+      margin: 0;
+    }
     .meta { font-size: 0.85rem; color: var(--muted); word-break: break-all; }
     .network-panel { margin-bottom: 1rem; }
     .hidden { display: none; }
@@ -98,12 +104,66 @@
       color: var(--warn);
       margin: -0.35rem 0 0.85rem;
     }
+    #issues {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      margin-bottom: 1rem;
+    }
+    .issue {
+      border-radius: 8px;
+      padding: 0.75rem 0.9rem;
+      font-size: 0.9rem;
+      display: flex;
+      gap: 0.75rem;
+      align-items: flex-start;
+      justify-content: space-between;
+    }
+    .issue.error {
+      background: rgba(232, 93, 93, 0.12);
+      border: 1px solid rgba(232, 93, 93, 0.45);
+      color: #ffc9c9;
+    }
+    .issue.warn {
+      background: rgba(232, 184, 74, 0.12);
+      border: 1px solid rgba(232, 184, 74, 0.45);
+      color: #ffe6a8;
+    }
+    .issue code {
+      font-size: 0.75rem;
+      opacity: 0.85;
+    }
+    .issue-actions { flex-shrink: 0; }
+    .log-toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      align-items: center;
+      margin-bottom: 0.75rem;
+    }
+    .log-toolbar label {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      margin: 0;
+      color: var(--text);
+    }
+    .log-toolbar input[type="checkbox"] { width: auto; margin: 0; }
+    .log-source-btn.active {
+      background: var(--accent);
+      color: #061018;
+      font-weight: 600;
+      border-color: transparent;
+    }
+    #log-path { margin-top: 0.5rem; }
   </style>
 </head>
 <body>
   <main>
     <h1>wqc-miner</h1>
     <p class="subtitle">Local launcher for WQC worker nodes</p>
+
+    <div id="issues"></div>
 
     <section>
       <h2>Status</h2>
@@ -121,6 +181,20 @@
         <button class="secondary" id="btn-refresh">Refresh node status</button>
       </div>
       <p id="message"></p>
+    </section>
+
+    <section id="logs-section">
+      <h2>Logs</h2>
+      <div class="log-toolbar">
+        <button type="button" class="secondary log-source-btn active" data-source="core" id="btn-log-core">Core</button>
+        <button type="button" class="secondary log-source-btn" data-source="node" id="btn-log-node">Node</button>
+        <label><input type="checkbox" id="log-autoscroll" checked /> Auto-scroll</label>
+        <button type="button" class="secondary" id="btn-log-clear">Clear view</button>
+        <button type="button" class="secondary" id="btn-log-reconnect">Reconnect</button>
+        <span class="meta" id="log-ws-state">disconnected</span>
+      </div>
+      <pre id="log-view"></pre>
+      <p class="meta" id="log-path"></p>
     </section>
 
     <section>
@@ -207,6 +281,10 @@
       mainnet: ["https://world-qc.io/api/v1/p2p/bootstrap"],
     };
 
+    let logSource = "core";
+    let logWs = null;
+    let logLines = [];
+
     const message = (text, isError = false) => {
       const el = $("message");
       el.textContent = text || "";
@@ -219,7 +297,11 @@
         ...options,
       });
       const body = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(body.error || res.statusText);
+      if (!res.ok) {
+        const err = new Error(body.error || res.statusText);
+        err.code = body.code;
+        throw err;
+      }
       return body;
     }
 
@@ -282,6 +364,102 @@
       }
     }
 
+    function renderLogView() {
+      const view = $("log-view");
+      view.textContent = logLines.join("\n");
+      if ($("log-autoscroll").checked) {
+        view.scrollTop = view.scrollHeight;
+      }
+    }
+
+    function setLogWsState(text) {
+      $("log-ws-state").textContent = text;
+    }
+
+    function connectLogWs(source = logSource) {
+      logSource = source;
+      document.querySelectorAll(".log-source-btn").forEach((btn) => {
+        btn.classList.toggle("active", btn.dataset.source === source);
+      });
+      if (logWs) {
+        try { logWs.close(); } catch (_) {}
+        logWs = null;
+      }
+      logLines = [];
+      renderLogView();
+      $("log-path").textContent = "";
+
+      const proto = location.protocol === "https:" ? "wss:" : "ws:";
+      const url = `${proto}//${location.host}/api/logs/ws?source=${encodeURIComponent(source)}&lines=200`;
+      setLogWsState("connecting…");
+      const ws = new WebSocket(url);
+      logWs = ws;
+
+      ws.onopen = () => setLogWsState(`connected (${source})`);
+      ws.onclose = () => {
+        if (logWs === ws) {
+          setLogWsState("disconnected");
+          logWs = null;
+        }
+      };
+      ws.onerror = () => setLogWsState("error");
+      ws.onmessage = (ev) => {
+        let msg;
+        try { msg = JSON.parse(ev.data); } catch (_) { return; }
+        if (msg.type === "hello") {
+          logLines = Array.isArray(msg.lines) ? msg.lines.slice() : [];
+          $("log-path").textContent = msg.path
+            ? `${msg.path}${msg.truncated ? " (truncated to last lines)" : ""}${msg.exists === false ? " — file not created yet" : ""}`
+            : "";
+          renderLogView();
+        } else if (msg.type === "line") {
+          logLines.push(msg.line);
+          if (logLines.length > 2000) logLines = logLines.slice(-1500);
+          renderLogView();
+        } else if (msg.type === "error") {
+          logLines.push(`[ws] ${msg.message}`);
+          renderLogView();
+        }
+      };
+    }
+
+    function showLogSource(source) {
+      connectLogWs(source);
+      $("logs-section").scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+
+    function applyIssues(issues) {
+      const root = $("issues");
+      root.innerHTML = "";
+      (issues || []).forEach((issue) => {
+        const el = document.createElement("div");
+        el.className = `issue ${issue.severity === "warn" ? "warn" : "error"}`;
+        const text = document.createElement("div");
+        text.innerHTML = `<div><code>${issue.code || ""}</code></div><div>${escapeHtml(issue.message || "")}</div>`;
+        el.appendChild(text);
+        if (issue.log_source) {
+          const actions = document.createElement("div");
+          actions.className = "issue-actions";
+          const btn = document.createElement("button");
+          btn.type = "button";
+          btn.className = "secondary";
+          btn.textContent = `View ${issue.log_source} logs`;
+          btn.addEventListener("click", () => showLogSource(issue.log_source));
+          actions.appendChild(btn);
+          el.appendChild(actions);
+        }
+        root.appendChild(el);
+      });
+    }
+
+    function escapeHtml(s) {
+      return String(s)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+    }
+
     function applyMiningStatus(status) {
       const badge = $("mining-badge");
       if (status.mining) {
@@ -297,6 +475,7 @@
       $("core-status").textContent = status.core_running ? "running" : "stopped";
       $("node-status").textContent = status.node_running ? "running" : "stopped";
       $("status-message").textContent = status.message || "";
+      applyIssues(status.issues || []);
     }
 
     async function refresh() {
@@ -354,6 +533,7 @@
         $("node_key").value = "";
         $("wallet_address").value = "";
         message("Settings saved.");
+        await refresh();
       } catch (err) {
         message(err.message, true);
       }
@@ -366,8 +546,15 @@
         applyMiningStatus(data.status);
         message(data.status.message || "Mining started.");
         refreshNodeStatus();
+        connectLogWs(logSource);
       } catch (err) {
         message(err.message, true);
+        await refresh().catch(() => {});
+        if (err.code === "core_unhealthy" || err.code === "core_spawn_failed" || err.code === "core_exited") {
+          showLogSource("core");
+        } else if (err.code === "node_spawn_failed" || err.code === "node_exited" || err.code === "bootstrap_unreachable") {
+          showLogSource("node");
+        }
       }
     });
 
@@ -378,14 +565,25 @@
         applyMiningStatus(data.status);
         $("node-json").textContent = "Not running";
         message("Mining stopped.");
+        connectLogWs(logSource);
       } catch (err) {
         message(err.message, true);
       }
     });
 
     $("btn-refresh").addEventListener("click", () => refreshNodeStatus());
+    $("btn-log-clear").addEventListener("click", () => {
+      logLines = [];
+      renderLogView();
+    });
+    $("btn-log-reconnect").addEventListener("click", () => connectLogWs(logSource));
+    document.querySelectorAll(".log-source-btn").forEach((btn) => {
+      btn.addEventListener("click", () => connectLogWs(btn.dataset.source));
+    });
 
-    refresh().catch((err) => message(err.message, true));
+    refresh()
+      .then(() => connectLogWs("core"))
+      .catch((err) => message(err.message, true));
     setInterval(() => refresh().catch(() => {}), 5000);
   </script>
 </body>

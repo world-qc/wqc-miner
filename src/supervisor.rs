@@ -10,6 +10,57 @@ use crate::config::{MinerSettings, Network, TnBackend};
 use crate::data_dir::DataLayout;
 use crate::paths::BinaryPaths;
 
+#[derive(Debug, Clone, serde::Serialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum IssueSeverity {
+    Error,
+    Warn,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct StatusIssue {
+    pub code: String,
+    pub message: String,
+    pub severity: IssueSeverity,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub log_source: Option<String>,
+}
+
+impl std::fmt::Display for StatusIssue {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}: {}", self.code, self.message)
+    }
+}
+
+impl StatusIssue {
+    pub fn error(code: &str, message: impl Into<String>) -> Self {
+        Self {
+            code: code.to_string(),
+            message: message.into(),
+            severity: IssueSeverity::Error,
+            log_source: None,
+        }
+    }
+
+    pub fn error_with_log(code: &str, message: impl Into<String>, log_source: &str) -> Self {
+        Self {
+            code: code.to_string(),
+            message: message.into(),
+            severity: IssueSeverity::Error,
+            log_source: Some(log_source.to_string()),
+        }
+    }
+
+    pub fn warn(code: &str, message: impl Into<String>) -> Self {
+        Self {
+            code: code.to_string(),
+            message: message.into(),
+            severity: IssueSeverity::Warn,
+            log_source: None,
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct Supervisor {
     layout: DataLayout,
@@ -20,6 +71,8 @@ pub struct Supervisor {
     core_child: Option<Child>,
     node_child: Option<Child>,
     mining_active: bool,
+    /// Sticky issues from the last start/auto-start failure or child exit.
+    last_issues: Vec<StatusIssue>,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -30,6 +83,7 @@ pub struct MiningStatus {
     pub network: Network,
     pub tn_backend: TnBackend,
     pub message: Option<String>,
+    pub issues: Vec<StatusIssue>,
 }
 
 impl Supervisor {
@@ -49,25 +103,159 @@ impl Supervisor {
             core_child: None,
             node_child: None,
             mining_active: false,
+            last_issues: Vec::new(),
         }
     }
 
-    fn ensure_binaries(&mut self) -> anyhow::Result<()> {
+    fn ensure_binaries(&mut self) -> Result<(), StatusIssue> {
         if self.binaries.is_some() {
             return Ok(());
         }
-        self.binaries = Some(
-            BinaryPaths::resolve(self.bin_dir_override.as_deref())
-                .context("wqc-core / wqc-node not found — set --bin-dir or WQC_MINER_BIN_DIR")?,
-        );
-        Ok(())
+        match BinaryPaths::resolve(self.bin_dir_override.as_deref()) {
+            Ok(paths) => {
+                self.binaries = Some(paths);
+                Ok(())
+            }
+            Err(err) => Err(StatusIssue::error(
+                "binaries_missing",
+                format!("{err:#} — set --bin-dir or WQC_MINER_BIN_DIR"),
+            )),
+        }
     }
 
     pub fn reload_settings(&mut self, settings: MinerSettings) {
         self.settings = settings;
     }
 
-    pub fn status(&self) -> MiningStatus {
+    fn clear_sticky_issues(&mut self) {
+        self.last_issues.clear();
+    }
+
+    fn set_sticky_issue(&mut self, issue: StatusIssue) {
+        self.last_issues = vec![issue];
+    }
+
+    /// Reap exited children and update sticky issues / mining flag.
+    pub fn refresh_runtime_state(&mut self) {
+        if self.settings.is_mainnet_mock() {
+            return;
+        }
+
+        let mut core_exited = false;
+        let mut node_exited = false;
+        let mut core_code = None;
+        let mut node_code = None;
+
+        if let Some(child) = self.core_child.as_mut() {
+            match child.try_wait() {
+                Ok(Some(status)) => {
+                    core_exited = true;
+                    core_code = status.code();
+                    self.core_child = None;
+                }
+                Ok(None) => {}
+                Err(err) => {
+                    tracing::warn!(error = %err, "try_wait wqc-core failed");
+                    core_exited = true;
+                    self.core_child = None;
+                }
+            }
+        }
+
+        if let Some(child) = self.node_child.as_mut() {
+            match child.try_wait() {
+                Ok(Some(status)) => {
+                    node_exited = true;
+                    node_code = status.code();
+                    self.node_child = None;
+                }
+                Ok(None) => {}
+                Err(err) => {
+                    tracing::warn!(error = %err, "try_wait wqc-node failed");
+                    node_exited = true;
+                    self.node_child = None;
+                }
+            }
+        }
+
+        if core_exited || node_exited {
+            self.mining_active = false;
+            let mut issues = Vec::new();
+            if core_exited {
+                issues.push(StatusIssue::error_with_log(
+                    "core_exited",
+                    format!("wqc-core exited unexpectedly{}", exit_code_note(core_code)),
+                    "core",
+                ));
+            }
+            if node_exited {
+                issues.push(StatusIssue::error_with_log(
+                    "node_exited",
+                    format!("wqc-node exited unexpectedly{}", exit_code_note(node_code)),
+                    "node",
+                ));
+            }
+            self.last_issues = issues;
+        }
+    }
+
+    pub async fn collect_issues(&mut self) -> Vec<StatusIssue> {
+        self.refresh_runtime_state();
+
+        let mut issues = self.last_issues.clone();
+
+        if self.binaries.is_none()
+            && BinaryPaths::try_resolve(self.bin_dir_override.as_deref())
+                .ok()
+                .flatten()
+                .is_none()
+            && !issues.iter().any(|i| i.code == "binaries_missing")
+        {
+            issues.push(StatusIssue::warn(
+                "binaries_missing",
+                "wqc-core / wqc-node not found — set --bin-dir or WQC_MINER_BIN_DIR before starting",
+            ));
+        }
+
+        if self.mining_active
+            && !self.settings.is_mainnet_mock()
+            && self.node_child.is_some()
+            && !issues.iter().any(|i| {
+                i.code == "bootstrap_unreachable"
+                    || i.code == "node_exited"
+                    || i.code == "core_exited"
+            })
+        {
+            if let Err(err) = self.probe_node_http().await {
+                issues.push(StatusIssue::warn(
+                    "bootstrap_unreachable",
+                    format!(
+                        "wqc-node HTTP /status is unreachable ({err:#}). Check bootstrap / P2P and node logs."
+                    ),
+                ));
+                if let Some(issue) = issues.last_mut() {
+                    issue.log_source = Some("node".to_string());
+                }
+            }
+        }
+
+        issues
+    }
+
+    async fn probe_node_http(&self) -> anyhow::Result<()> {
+        let url = format!("http://127.0.0.1:{}/status", self.settings.node_http_port);
+        let client = reqwest::Client::builder()
+            .timeout(Duration::from_secs(2))
+            .build()?;
+        let response = client.get(&url).send().await?;
+        if !response.status().is_success() {
+            bail!("HTTP {}", response.status());
+        }
+        Ok(())
+    }
+
+    pub async fn status(&mut self) -> MiningStatus {
+        let issues = self.collect_issues().await;
         let (core_running, node_running, message) = if self.settings.is_mainnet_mock() {
             (
                 false,
@@ -91,44 +279,97 @@ impl Supervisor {
             network: self.settings.network,
             tn_backend: self.settings.tn_backend,
             message,
+            issues,
         }
     }
 
-    pub async fn start(&mut self) -> anyhow::Result<MiningStatus> {
+    pub async fn start(&mut self) -> Result<MiningStatus, StatusIssue> {
         if self.core_child.is_some() || self.node_child.is_some() {
-            bail!("mining is already running or stopping — try again");
+            return Err(StatusIssue::warn(
+                "already_running",
+                "mining is already running or stopping — try again",
+            ));
         }
         if self.mining_active {
-            bail!("mining is already running");
+            return Err(StatusIssue::warn(
+                "already_running",
+                "mining is already running",
+            ));
         }
-        self.settings.validate_for_start()?;
+
+        if let Err(issue) = self.preflight_issue() {
+            self.set_sticky_issue(issue.clone());
+            return Err(issue);
+        }
 
         if self.settings.is_mainnet_mock() {
             tracing::info!(
                 wallet = %self.settings.wallet_address,
                 "mainnet mock start — skipping core/node spawn"
             );
+            self.clear_sticky_issues();
             self.mining_active = true;
-            return Ok(self.status());
+            return Ok(self.status().await);
         }
 
-        self.start_core().await?;
-        self.wait_for_core_health().await?;
-        self.start_node().await?;
-        self.mining_active = true;
+        if let Err(issue) = self.start_core().await {
+            self.set_sticky_issue(issue.clone());
+            let _ = self.stop_children().await;
+            return Err(issue);
+        }
+        if let Err(issue) = self.wait_for_core_health().await {
+            self.set_sticky_issue(issue.clone());
+            let _ = self.stop_children().await;
+            return Err(issue);
+        }
+        if let Err(issue) = self.start_node().await {
+            self.set_sticky_issue(issue.clone());
+            let _ = self.stop_children().await;
+            return Err(issue);
+        }
 
-        Ok(self.status())
+        self.clear_sticky_issues();
+        self.mining_active = true;
+        Ok(self.status().await)
+    }
+
+    fn preflight_issue(&mut self) -> Result<(), StatusIssue> {
+        match self.settings.network {
+            Network::Testnet => {
+                if self.settings.node_key.trim().is_empty() {
+                    return Err(StatusIssue::error(
+                        "node_key_missing",
+                        "Set your Node Key in settings before starting (from the testnet dashboard).",
+                    ));
+                }
+            }
+            Network::Mainnet => {
+                if self.settings.wallet_address.trim().is_empty() {
+                    return Err(StatusIssue::error(
+                        "wallet_missing",
+                        "Set your wallet address in settings before starting.",
+                    ));
+                }
+            }
+        }
+        self.ensure_binaries()?;
+        Ok(())
     }
 
     pub async fn stop(&mut self) -> anyhow::Result<MiningStatus> {
+        self.stop_children().await;
+        self.mining_active = false;
+        self.clear_sticky_issues();
+        Ok(self.status().await)
+    }
+
+    async fn stop_children(&mut self) {
         if let Some(mut child) = self.node_child.take() {
             stop_child(&mut child).await;
         }
         if let Some(mut child) = self.core_child.take() {
             stop_child(&mut child).await;
         }
-        self.mining_active = false;
-        Ok(self.status())
     }
 
     pub async fn node_status_json(&self) -> anyhow::Result<serde_json::Value> {
@@ -182,7 +423,7 @@ impl Supervisor {
         }))
     }
 
-    async fn start_core(&mut self) -> anyhow::Result<()> {
+    async fn start_core(&mut self) -> Result<(), StatusIssue> {
         self.ensure_binaries()?;
         let core_bin = self
             .binaries
@@ -214,7 +455,13 @@ impl Supervisor {
         }
 
         tracing::info!("starting wqc-core: {}", core_bin.display());
-        let mut child = cmd.spawn().context("spawn wqc-core")?;
+        let mut child = cmd.spawn().map_err(|err| {
+            StatusIssue::error_with_log(
+                "core_spawn_failed",
+                format!("failed to spawn wqc-core: {err}"),
+                "core",
+            )
+        })?;
         self.spawn_log_task(
             "core",
             child.stdout.take(),
@@ -225,7 +472,7 @@ impl Supervisor {
         Ok(())
     }
 
-    async fn start_node(&mut self) -> anyhow::Result<()> {
+    async fn start_node(&mut self) -> Result<(), StatusIssue> {
         self.ensure_binaries()?;
         let node_bin = self
             .binaries
@@ -254,7 +501,13 @@ impl Supervisor {
             .env("WQC_DATABASE_URL", db_url);
 
         tracing::info!("starting wqc-node: {}", node_bin.display());
-        let mut child = cmd.spawn().context("spawn wqc-node")?;
+        let mut child = cmd.spawn().map_err(|err| {
+            StatusIssue::error_with_log(
+                "node_spawn_failed",
+                format!("failed to spawn wqc-node: {err}"),
+                "node",
+            )
+        })?;
         self.spawn_log_task(
             "node",
             child.stdout.take(),
@@ -265,9 +518,15 @@ impl Supervisor {
         Ok(())
     }
 
-    async fn wait_for_core_health(&self) -> anyhow::Result<()> {
+    async fn wait_for_core_health(&self) -> Result<(), StatusIssue> {
         let health_url = core_http_url(&self.settings, "/health");
-        let client = build_core_client(&self.layout)?;
+        let client = build_core_client(&self.layout).map_err(|err| {
+            StatusIssue::error_with_log(
+                "core_unhealthy",
+                format!("cannot build health client: {err:#}"),
+                "core",
+            )
+        })?;
 
         for attempt in 1..=30 {
             let result = client.get(&health_url).send().await;
@@ -289,7 +548,11 @@ impl Supervisor {
             }
             sleep(Duration::from_secs(1)).await;
         }
-        bail!("wqc-core did not become healthy within 30 seconds");
+        Err(StatusIssue::error_with_log(
+            "core_unhealthy",
+            "wqc-core did not become healthy within 30 seconds — check Core logs",
+            "core",
+        ))
     }
 
     fn spawn_log_task(
@@ -300,7 +563,6 @@ impl Supervisor {
         path: std::path::PathBuf,
     ) {
         let name = name.to_string();
-        // Ignore errors in log task; they are best-effort.
         tokio::spawn(async move {
             if let Some(parent) = path.parent() {
                 let _ = tokio::fs::create_dir_all(parent).await;
@@ -330,7 +592,7 @@ impl Supervisor {
                 while let Ok(Some(line)) = reader.next_line().await {
                     let _ = tokio::io::AsyncWriteExt::write_all(
                         &mut writer,
-                        format!("[{}][stdout] {}\n", name, line).as_bytes(),
+                        format!("[{name}][stdout] {line}\n").as_bytes(),
                     )
                     .await;
                 }
@@ -340,12 +602,19 @@ impl Supervisor {
                 while let Ok(Some(line)) = reader.next_line().await {
                     let _ = tokio::io::AsyncWriteExt::write_all(
                         &mut writer,
-                        format!("[{}][stderr] {}\n", name, line).as_bytes(),
+                        format!("[{name}][stderr] {line}\n").as_bytes(),
                     )
                     .await;
                 }
             }
         });
+    }
+}
+
+fn exit_code_note(code: Option<i32>) -> String {
+    match code {
+        Some(c) => format!(" (exit {c})"),
+        None => String::new(),
     }
 }
 

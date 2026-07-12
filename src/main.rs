@@ -3,6 +3,7 @@ mod cli;
 mod config;
 mod data_dir;
 mod keys;
+mod logs;
 mod memory_budget;
 mod paths;
 mod supervisor;
@@ -76,7 +77,8 @@ async fn main() -> anyhow::Result<()> {
             }
             Err(err) => {
                 tracing::error!(
-                    "auto-start failed: {err:#} — admin UI remains available; fix settings and retry"
+                    code = %err.code,
+                    "auto-start failed: {err} — admin UI remains available; fix settings and retry"
                 );
             }
         }

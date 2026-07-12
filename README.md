@@ -123,11 +123,14 @@ On Windows, `wqc-core` reads `WQC_CORE_TCP_PORT` (default `3000`; miner defaults
 
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/api/status` | Mining + settings summary |
+| GET | `/api/status` | Mining + settings summary; includes `mining.issues[]` (`code`, `message`, `severity`, optional `log_source`) |
 | GET/PUT | `/api/settings` | Read/update settings |
-| POST | `/api/mining/start` | Start (testnet: core → node; mainnet: mock) |
+| POST | `/api/mining/start` | Start (testnet: core → node; mainnet: mock). Errors may include `code` |
 | POST | `/api/mining/stop` | Stop node → core (or mock) |
 | GET | `/api/node-status` | Proxy `wqc-node` `/status` (mock on mainnet) |
+| WS | `/api/logs/ws?source=core\|node&lines=200` | Initial log tail (`hello`) then live `line` events |
+
+Issue codes include `node_key_missing`, `binaries_missing`, `core_unhealthy`, `core_exited`, `node_exited`, `bootstrap_unreachable`.
 
 ## Contributing
 

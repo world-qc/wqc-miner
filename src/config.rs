@@ -166,22 +166,6 @@ impl MinerSettings {
         }
     }
 
-    pub fn validate_for_start(&self) -> anyhow::Result<()> {
-        match self.network {
-            Network::Testnet => {
-                if self.node_key.trim().is_empty() {
-                    anyhow::bail!("set your node key in settings before starting");
-                }
-            }
-            Network::Mainnet => {
-                if self.wallet_address.trim().is_empty() {
-                    anyhow::bail!("set your wallet address in settings before starting");
-                }
-            }
-        }
-        Ok(())
-    }
-
     pub fn is_mainnet_mock(&self) -> bool {
         self.network == Network::Mainnet
     }
