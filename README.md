@@ -1,5 +1,9 @@
 # wqc-miner
 
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
+[![Status: Alpha](https://img.shields.io/badge/Status-Alpha-yellow.svg)]()
+[![CI](https://github.com/world-qc/wqc-miner/actions/workflows/ci.yml/badge.svg)](https://github.com/world-qc/wqc-miner/actions/workflows/ci.yml)
+
 Cross-platform launcher and local admin UI for WQC worker nodes. Bundles `wqc-core` (quantum compute) and `wqc-node` (P2P worker) behind a single desktop-style workflow.
 
 ## What it does
@@ -132,14 +136,6 @@ On Windows, `wqc-core` reads `WQC_CORE_TCP_PORT` (default `3000`; miner defaults
 
 Issue codes include `node_key_missing`, `binaries_missing`, `core_unhealthy`, `core_exited`, `node_exited`, `bootstrap_unreachable`.
 
-## Contributing
-
-Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, coding guidelines, and the pull request process.
-
-## License
-
-GPL-3.0 — see [LICENSE](LICENSE).
-
 ## CI / Release
 
 | Workflow | Trigger | Purpose |
@@ -173,3 +169,11 @@ gh attestation verify wqc-miner-linux-x64.tar.gz -R world-qc/wqc-miner
 ```
 
 OS SmartScreen / Gatekeeper may still warn; use attestation verify as the trust path.
+
+## Contributing
+
+Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, coding guidelines, and the pull request process.
+
+## License
+
+Distributed under the GNU General Public License v3.0 (GPLv3). See `LICENSE` for more information.
