@@ -1,10 +1,18 @@
 use std::process::Stdio;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use anyhow::{bail, Context};
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::{Child, Command};
 use tokio::time::sleep;
+
+/// Max automatic wqc-core restarts before mining is stopped.
+const CORE_RESTART_MAX_ATTEMPTS: u32 = 10;
+/// Base delay (seconds) for exponential backoff: min(60, 2^attempt).
+const CORE_RESTART_BASE_DELAY_SECS: u64 = 2;
+const CORE_RESTART_MAX_DELAY_SECS: u64 = 60;
+/// After this many seconds of continuous core uptime, the restart budget resets.
+const CORE_RESTART_STABLE_SECS: u64 = 60;
 
 use crate::config::{MinerSettings, Network, TnBackend};
 use crate::data_dir::DataLayout;
@@ -73,6 +81,12 @@ pub struct Supervisor {
     mining_active: bool,
     /// Sticky issues from the last start/auto-start failure or child exit.
     last_issues: Vec<StatusIssue>,
+    /// Unexpected core exits / failed restarts since the last stable period.
+    core_restart_attempts: u32,
+    /// Earliest time to attempt another core restart (`None` = not scheduled).
+    core_restart_after: Option<Instant>,
+    /// When the current core process last became healthy (`None` if down).
+    core_stable_since: Option<Instant>,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -104,7 +118,48 @@ impl Supervisor {
             node_child: None,
             mining_active: false,
             last_issues: Vec::new(),
+            core_restart_attempts: 0,
+            core_restart_after: None,
+            core_stable_since: None,
         }
+    }
+
+    fn clear_core_restart_state(&mut self) {
+        self.core_restart_attempts = 0;
+        self.core_restart_after = None;
+        self.core_stable_since = None;
+    }
+
+    fn mark_core_healthy(&mut self) {
+        self.core_restart_after = None;
+        self.core_stable_since = Some(Instant::now());
+    }
+
+    fn maybe_reset_restart_budget(&mut self) {
+        if self.core_child.is_none() {
+            return;
+        }
+        let Some(since) = self.core_stable_since else {
+            return;
+        };
+        if since.elapsed() >= Duration::from_secs(CORE_RESTART_STABLE_SECS)
+            && self.core_restart_attempts > 0
+        {
+            tracing::info!(
+                stable_secs = CORE_RESTART_STABLE_SECS,
+                "wqc-core stayed up; clearing restart budget"
+            );
+            self.core_restart_attempts = 0;
+        }
+    }
+
+    fn schedule_core_restart(&mut self, delay: Duration) {
+        self.core_restart_after = Some(Instant::now() + delay);
+    }
+
+    fn core_restart_delay(attempt: u32) -> Duration {
+        let exp = CORE_RESTART_BASE_DELAY_SECS.saturating_mul(1u64 << attempt.min(5));
+        Duration::from_secs(exp.min(CORE_RESTART_MAX_DELAY_SECS))
     }
 
     fn ensure_binaries(&mut self) -> Result<(), StatusIssue> {
@@ -178,8 +233,9 @@ impl Supervisor {
             }
         }
 
-        if core_exited || node_exited {
+        if node_exited {
             self.mining_active = false;
+            self.clear_core_restart_state();
             let mut issues = Vec::new();
             if core_exited {
                 issues.push(StatusIssue::error_with_log(
@@ -188,15 +244,121 @@ impl Supervisor {
                     "core",
                 ));
             }
-            if node_exited {
-                issues.push(StatusIssue::error_with_log(
-                    "node_exited",
-                    format!("wqc-node exited unexpectedly{}", exit_code_note(node_code)),
-                    "node",
-                ));
-            }
+            issues.push(StatusIssue::error_with_log(
+                "node_exited",
+                format!("wqc-node exited unexpectedly{}", exit_code_note(node_code)),
+                "node",
+            ));
             self.last_issues = issues;
+            return;
         }
+
+        if core_exited && self.mining_active {
+            self.core_stable_since = None;
+            let delay = Self::core_restart_delay(self.core_restart_attempts);
+            self.schedule_core_restart(delay);
+            let next_attempt = self.core_restart_attempts.saturating_add(1);
+            self.last_issues = vec![StatusIssue::warn(
+                "core_restarting",
+                format!(
+                    "wqc-core exited unexpectedly{} — restarting in {}s (attempt {}/{})",
+                    exit_code_note(core_code),
+                    delay.as_secs().max(1),
+                    next_attempt.min(CORE_RESTART_MAX_ATTEMPTS),
+                    CORE_RESTART_MAX_ATTEMPTS
+                ),
+            )];
+            if let Some(issue) = self.last_issues.last_mut() {
+                issue.log_source = Some("core".to_string());
+            }
+            tracing::warn!(
+                exit_code = ?core_code,
+                delay_secs = delay.as_secs(),
+                next_attempt,
+                "wqc-core exited; scheduling auto-restart"
+            );
+        }
+    }
+
+    /// Periodic supervision: reap children and auto-restart core while mining.
+    pub async fn tick(&mut self) {
+        self.refresh_runtime_state();
+        self.maybe_reset_restart_budget();
+
+        if !self.mining_active || self.settings.is_mainnet_mock() {
+            return;
+        }
+
+        if self.core_child.is_some() {
+            return;
+        }
+
+        let Some(after) = self.core_restart_after else {
+            // Core missing without a schedule (e.g. race); schedule immediately.
+            self.schedule_core_restart(Duration::from_secs(0));
+            return;
+        };
+        if Instant::now() < after {
+            return;
+        }
+
+        self.core_restart_attempts = self.core_restart_attempts.saturating_add(1);
+        let attempt = self.core_restart_attempts;
+        if attempt > CORE_RESTART_MAX_ATTEMPTS {
+            self.mining_active = false;
+            self.clear_core_restart_state();
+            self.set_sticky_issue(StatusIssue::error_with_log(
+                "core_restart_failed",
+                format!(
+                    "wqc-core failed to stay up after {CORE_RESTART_MAX_ATTEMPTS} restart attempts — mining stopped"
+                ),
+                "core",
+            ));
+            tracing::error!("wqc-core restart budget exhausted; stopping mining");
+            return;
+        }
+
+        tracing::info!(attempt, max = CORE_RESTART_MAX_ATTEMPTS, "auto-restarting wqc-core");
+
+        if let Err(issue) = self.start_core().await {
+            let delay = Self::core_restart_delay(attempt);
+            self.schedule_core_restart(delay);
+            let mut issue = issue;
+            issue.message = format!(
+                "{} — next retry in {}s ({}/{})",
+                issue.message,
+                delay.as_secs().max(1),
+                attempt,
+                CORE_RESTART_MAX_ATTEMPTS
+            );
+            self.set_sticky_issue(issue);
+            return;
+        }
+
+        if let Err(issue) = self.wait_for_core_health().await {
+            // Drop the unhealthy child so the next tick can respawn.
+            if let Some(mut child) = self.core_child.take() {
+                stop_child(&mut child).await;
+            }
+            let delay = Self::core_restart_delay(attempt);
+            self.schedule_core_restart(delay);
+            let mut issue = issue;
+            issue.code = "core_restarting".to_string();
+            issue.severity = IssueSeverity::Warn;
+            issue.message = format!(
+                "{} — next retry in {}s ({}/{})",
+                issue.message,
+                delay.as_secs().max(1),
+                attempt,
+                CORE_RESTART_MAX_ATTEMPTS
+            );
+            self.set_sticky_issue(issue);
+            return;
+        }
+
+        tracing::info!(attempt, "wqc-core auto-restart succeeded");
+        self.mark_core_healthy();
+        self.clear_sticky_issues();
     }
 
     pub async fn collect_issues(&mut self) -> Vec<StatusIssue> {
@@ -224,6 +386,8 @@ impl Supervisor {
                 i.code == "bootstrap_unreachable"
                     || i.code == "node_exited"
                     || i.code == "core_exited"
+                    || i.code == "core_restarting"
+                    || i.code == "core_restart_failed"
             })
         {
             if let Err(err) = self.probe_node_http().await {
@@ -328,6 +492,8 @@ impl Supervisor {
             return Err(issue);
         }
 
+        self.core_restart_attempts = 0;
+        self.mark_core_healthy();
         self.clear_sticky_issues();
         self.mining_active = true;
         Ok(self.status().await)
@@ -359,6 +525,7 @@ impl Supervisor {
     pub async fn stop(&mut self) -> anyhow::Result<MiningStatus> {
         self.stop_children().await;
         self.mining_active = false;
+        self.clear_core_restart_state();
         self.clear_sticky_issues();
         Ok(self.status().await)
     }

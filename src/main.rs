@@ -10,6 +10,7 @@ mod supervisor;
 
 use std::net::SocketAddr;
 use std::sync::Arc;
+use std::time::Duration;
 
 use anyhow::Context;
 use clap::Parser;
@@ -90,6 +91,18 @@ async fn main() -> anyhow::Result<()> {
         settings: Arc::new(RwLock::new(settings)),
         supervisor: supervisor.clone(),
     };
+
+    {
+        let supervisor = supervisor.clone();
+        tokio::spawn(async move {
+            let mut interval = tokio::time::interval(Duration::from_secs(1));
+            interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+            loop {
+                interval.tick().await;
+                supervisor.write().await.tick().await;
+            }
+        });
+    }
 
     let app = admin::router(admin_state);
     let addr = SocketAddr::from(([127, 0, 0, 1], admin_port));

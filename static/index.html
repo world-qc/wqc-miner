@@ -550,7 +550,7 @@
       } catch (err) {
         message(err.message, true);
         await refresh().catch(() => {});
-        if (err.code === "core_unhealthy" || err.code === "core_spawn_failed" || err.code === "core_exited") {
+        if (err.code === "core_unhealthy" || err.code === "core_spawn_failed" || err.code === "core_exited" || err.code === "core_restarting" || err.code === "core_restart_failed") {
           showLogSource("core");
         } else if (err.code === "node_spawn_failed" || err.code === "node_exited" || err.code === "bootstrap_unreachable") {
           showLogSource("node");

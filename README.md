@@ -134,7 +134,9 @@ On Windows, `wqc-core` reads `WQC_CORE_TCP_PORT` (default `3000`; miner defaults
 | GET | `/api/node-status` | Proxy `wqc-node` `/status` (mock on mainnet) |
 | WS | `/api/logs/ws?source=core\|node&lines=200` | Initial log tail (`hello`) then live `line` events |
 
-Issue codes include `node_key_missing`, `binaries_missing`, `core_unhealthy`, `core_exited`, `node_exited`, `bootstrap_unreachable`.
+Issue codes include `node_key_missing`, `binaries_missing`, `core_unhealthy`, `core_exited`, `core_restarting`, `core_restart_failed`, `node_exited`, `bootstrap_unreachable`.
+
+While mining, if `wqc-core` exits unexpectedly the miner keeps `wqc-node` running and auto-restarts core with exponential backoff (up to 10 exits). The restart budget resets after core stays healthy for 60s. Exhausted retries set `core_restart_failed` and stop mining. Node exits still stop mining immediately.
 
 ## CI / Release
 
