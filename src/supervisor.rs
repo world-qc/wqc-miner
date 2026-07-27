@@ -318,7 +318,11 @@ impl Supervisor {
             return;
         }
 
-        tracing::info!(attempt, max = CORE_RESTART_MAX_ATTEMPTS, "auto-restarting wqc-core");
+        tracing::info!(
+            attempt,
+            max = CORE_RESTART_MAX_ATTEMPTS,
+            "auto-restarting wqc-core"
+        );
 
         if let Err(issue) = self.start_core().await {
             let delay = Self::core_restart_delay(attempt);
@@ -612,6 +616,9 @@ impl Supervisor {
                 format!("{}", self.settings.max_memory_gb),
             )
             .env("WQC_TN_BACKEND", self.settings.tn_backend.as_env());
+        forward_env_if_set(&mut cmd, "WQC_PCS_MEMORY_POLICY");
+        forward_env_if_set(&mut cmd, "WQC_M4B_GROUP_CHUNK");
+        forward_env_if_set(&mut cmd, "WQC_PCS_MEMORY_ESTIMATE_SCALE");
 
         if cfg!(unix) {
             cmd.env("WQC_CONNECTION_MODE", "uds");
@@ -775,6 +782,14 @@ impl Supervisor {
                 }
             }
         });
+    }
+}
+
+fn forward_env_if_set(cmd: &mut Command, key: &str) {
+    if let Ok(value) = std::env::var(key) {
+        if !value.trim().is_empty() {
+            cmd.env(key, value);
+        }
     }
 }
 
