@@ -617,7 +617,7 @@ impl Supervisor {
             )
             .env("WQC_TN_BACKEND", self.settings.tn_backend.as_env());
         forward_env_if_set(&mut cmd, "WQC_PCS_MEMORY_POLICY");
-        forward_env_if_set(&mut cmd, "WQC_M4B_GROUP_CHUNK");
+        forward_env_if_set(&mut cmd, "WQC_PCS_MMCS_GROUP_CHUNK");
         forward_env_if_set(&mut cmd, "WQC_PCS_MEMORY_ESTIMATE_SCALE");
 
         if cfg!(unix) {
