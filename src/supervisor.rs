@@ -673,6 +673,7 @@ impl Supervisor {
             )
             .env("WQC_HTTP_PORT", self.settings.node_http_port.to_string())
             .env("WQC_DATABASE_URL", db_url);
+        forward_env_if_set(&mut cmd, "WQC_PCS_TIMEOUT_SECS");
 
         tracing::info!("starting wqc-node: {}", node_bin.display());
         let mut child = cmd.spawn().map_err(|err| {
