@@ -22,15 +22,18 @@ env:
 jobs:
   build-windows:
     name: ${{ matrix.artifact_name }}
-    runs-on: windows-latest
+    runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
       matrix:
         include:
           - target: x86_64-pc-windows-msvc
             artifact_name: wqc-miner-windows-x64
+            runner: windows-latest
+          # ring 0.16 (libp2p QUIC/rcgen) cannot cross-compile x64→Win ARM64.
           - target: aarch64-pc-windows-msvc
             artifact_name: wqc-miner-windows-arm64
+            runner: windows-11-arm
 
     steps:
       - name: Checkout wqc-miner
