@@ -38,26 +38,36 @@ jobs:
         with:
           path: wqc-miner
 
+      # Sibling crates are private; GitHub App needs Contents: Read on each repo.
+      - name: Generate token for private deps
+        id: app-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.WQC_APP_ID }}
+          private-key: ${{ secrets.WQC_APP_PRIVATE_KEY }}
+          owner: world-qc
+          repositories: wqc-core,wqc-node,wqc-stark-engine
+
       - name: Checkout wqc-core
         uses: actions/checkout@v4
         with:
           repository: world-qc/wqc-core
           path: wqc-core
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ steps.app-token.outputs.token }}
 
       - name: Checkout wqc-node
         uses: actions/checkout@v4
         with:
           repository: world-qc/wqc-node
           path: wqc-node
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ steps.app-token.outputs.token }}
 
       - name: Checkout wqc-stark-engine
         uses: actions/checkout@v4
         with:
           repository: world-qc/wqc-stark-engine
           path: wqc-stark-engine
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ steps.app-token.outputs.token }}
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@master
@@ -117,26 +127,36 @@ jobs:
         with:
           path: wqc-miner
 
+      # Sibling crates are private; GitHub App needs Contents: Read on each repo.
+      - name: Generate token for private deps
+        id: app-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.WQC_APP_ID }}
+          private-key: ${{ secrets.WQC_APP_PRIVATE_KEY }}
+          owner: world-qc
+          repositories: wqc-core,wqc-node,wqc-stark-engine
+
       - name: Checkout wqc-core
         uses: actions/checkout@v4
         with:
           repository: world-qc/wqc-core
           path: wqc-core
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ steps.app-token.outputs.token }}
 
       - name: Checkout wqc-node
         uses: actions/checkout@v4
         with:
           repository: world-qc/wqc-node
           path: wqc-node
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ steps.app-token.outputs.token }}
 
       - name: Checkout wqc-stark-engine
         uses: actions/checkout@v4
         with:
           repository: world-qc/wqc-stark-engine
           path: wqc-stark-engine
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ steps.app-token.outputs.token }}
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@master
@@ -221,26 +241,36 @@ jobs:
         with:
           path: wqc-miner
 
+      # Sibling crates are private; GitHub App needs Contents: Read on each repo.
+      - name: Generate token for private deps
+        id: app-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.WQC_APP_ID }}
+          private-key: ${{ secrets.WQC_APP_PRIVATE_KEY }}
+          owner: world-qc
+          repositories: wqc-core,wqc-node,wqc-stark-engine
+
       - name: Checkout wqc-core
         uses: actions/checkout@v4
         with:
           repository: world-qc/wqc-core
           path: wqc-core
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ steps.app-token.outputs.token }}
 
       - name: Checkout wqc-node
         uses: actions/checkout@v4
         with:
           repository: world-qc/wqc-node
           path: wqc-node
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ steps.app-token.outputs.token }}
 
       - name: Checkout wqc-stark-engine
         uses: actions/checkout@v4
         with:
           repository: world-qc/wqc-stark-engine
           path: wqc-stark-engine
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ steps.app-token.outputs.token }}
 
       - name: Install build dependencies
         run: |
