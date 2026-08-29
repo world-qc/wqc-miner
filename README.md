@@ -125,16 +125,48 @@ On Windows, `wqc-core` reads `WQC_CORE_TCP_PORT` (default `3000`; miner defaults
 
 ## API (admin)
 
+The admin API **binds to localhost and has no authentication** — anything that can reach
+the port can rewrite settings and control mining. Do not expose the port.
+
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/api/status` | Mining + settings summary; includes `mining.issues[]` (`code`, `message`, `severity`, optional `log_source`) |
-| GET/PUT | `/api/settings` | Read/update settings |
+| GET | `/` | Bundled admin UI (assets under `/static`) |
+| GET | `/api/status` | Mining + settings summary; includes `mining.issues[]` |
+| GET/PUT | `/api/settings` | Read/update settings (partial update; secrets write-only) |
 | POST | `/api/mining/start` | Start (testnet: core → node; mainnet: mock). Errors may include `code` |
 | POST | `/api/mining/stop` | Stop node → core (or mock) |
 | GET | `/api/node-status` | Proxy `wqc-node` `/status` (mock on mainnet) |
 | WS | `/api/logs/ws?source=core\|node&lines=200` | Initial log tail (`hello`) then live `line` events |
 
-Issue codes include `node_key_missing`, `binaries_missing`, `core_unhealthy`, `core_exited`, `core_restarting`, `core_restart_failed`, `node_exited`, `bootstrap_unreachable`.
+### Semantics worth knowing
+
+- **`PUT /api/settings`:** every field is optional. `max_memory_gb` is clamped server-side to
+  `[1.0, host_max_memory_gb]`, so the stored value may differ from what was sent. `node_key`
+  and `wallet_address` are write-only; reads report only `node_key_set` / `wallet_address_set`.
+- **`GET /api/status` → `core_tn`:** present only when `wqc-core` is running **and** answered
+  `/sysinfo`. `null` means unknown, not “CPU backend”.
+- **`GET /api/node-status`:** when `wqc-node` is not running (or mainnet mock is inactive),
+  returns `400` rather than an empty success.
+- **`WS /api/logs/ws`:** frames are JSON text discriminated by `type` — one `hello` (tail),
+  then `line` events, or a terminal `error`. Unknown `source` yields an `error` frame after
+  upgrade (default `source=core`, `lines` clamped to 1–1000, default 200).
+
+Issue codes (`mining.issues[].code` and start errors):
+
+| Code | Meaning |
+|------|---------|
+| `node_key_missing` | Testnet selected but no node key is stored |
+| `wallet_missing` | Mainnet selected but no wallet address is stored |
+| `binaries_missing` | `wqc-core` or `wqc-node` executable not found |
+| `bootstrap_unreachable` | No configured bootstrap URL answered |
+| `already_running` | Start requested while mining is active or stopping |
+| `core_spawn_failed` | `wqc-core` could not be launched |
+| `node_spawn_failed` | `wqc-node` could not be launched |
+| `core_unhealthy` | `wqc-core` is running but not answering |
+| `core_exited` | `wqc-core` exited unexpectedly |
+| `core_restarting` | `wqc-core` is being restarted with backoff |
+| `core_restart_failed` | Restart budget exhausted; mining stopped |
+| `node_exited` | `wqc-node` exited, which stops mining immediately |
 
 While mining, if `wqc-core` exits unexpectedly the miner keeps `wqc-node` running and auto-restarts core with exponential backoff (up to 10 exits). The restart budget resets after core stays healthy for 60s. Exhausted retries set `core_restart_failed` and stop mining. Node exits still stop mining immediately.
 
