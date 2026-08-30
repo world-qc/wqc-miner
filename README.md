@@ -123,6 +123,16 @@ On Windows, `wqc-core` reads `WQC_CORE_TCP_PORT` (default `3000`; miner defaults
 | `WQC_HTTP_PORT` | settings |
 | `WQC_DATABASE_URL` | `sqlite:{data_dir}/node.db` |
 
+Optional env vars set **before** launching `wqc-miner` are forwarded to `wqc-core` when present (advanced tuning — most miners can ignore):
+
+| Variable | Forwarded to | Notes |
+|----------|--------------|-------|
+| `WQC_MPS_MAX_BOND_DIM` | `wqc-core` | MPS bond-dimension ceiling (default `128` in core). See [`wqc-core` `doc/tn-engine.md`](https://github.com/world-qc/wqc-core/blob/main/doc/tn-engine.md). |
+| `WQC_PCS_MEMORY_POLICY` | `wqc-core` | `refuse` or `spill` |
+| `WQC_PCS_MMCS_GROUP_CHUNK` | `wqc-core` | PCS prove chunk size |
+| `WQC_PCS_MEMORY_ESTIMATE_SCALE` | `wqc-core` | Memory estimate scale |
+| `WQC_PCS_TIMEOUT_SECS` | `wqc-node` | PCS open-call timeout |
+
 ## API (admin)
 
 The admin API **binds to localhost and has no authentication** — anything that can reach
