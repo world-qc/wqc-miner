@@ -1,19 +1,43 @@
 # wqc-miner
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
-[![Status: Alpha](https://img.shields.io/badge/Status-Alpha-yellow.svg)]()
+[![Status: Beta](https://img.shields.io/badge/Status-Beta-orange.svg)]()
 [![CI](https://github.com/world-qc/wqc-miner/actions/workflows/ci.yml/badge.svg)](https://github.com/world-qc/wqc-miner/actions/workflows/ci.yml)
 
-Cross-platform launcher and local admin UI for WQC worker nodes. Bundles `wqc-core` (quantum compute) and `wqc-node` (P2P worker) behind a single desktop-style workflow.
+Cross-platform launcher and local admin UI for WQC worker nodes. Bundles [`wqc-core`](https://github.com/world-qc/wqc-core) (quantum compute) and [`wqc-node`](https://github.com/world-qc/wqc-node) (P2P worker) behind a single desktop-style workflow.
+
+## Role in the WQC pipeline
+
+```
+client → wqc-orchestrator → wqc-node → wqc-core
+                              ↑ wqc-miner (this repo) starts & configures both
+```
+
+**Recommended entry point for operators** on testnet and mainnet. The launcher generates keys, holds network-specific credentials, sets memory budget and bootstrap URLs, and supervises `wqc-core` + `wqc-node` when mining is active.
+
+Task lifecycle is normative in [wqc-docs `spec/architecture-current.md` §3](https://github.com/world-qc/wqc-docs/blob/main/spec/architecture-current.md#3-task-lifecycle).
+
+## Networks
+
+| Network | Mining | Operator guide |
+|---------|--------|----------------|
+| **Testnet** | Live — core + node + P2P | [`docs/TESTNET.md`](docs/TESTNET.md) |
+| **Mainnet** | UI mock only (P2P not connected yet) | [`docs/MAINNET.md`](docs/MAINNET.md) |
+
+Pick **Testnet** or **Mainnet** in the admin UI (`http://127.0.0.1:3000` by default). Network-specific setup steps live in the guides above.
+
+## Quick start
+
+1. Download a release from [GitHub Releases](https://github.com/world-qc/wqc-miner/releases).
+2. Run `wqc-miner`, open the admin UI, choose your network.
+3. Follow [`docs/TESTNET.md`](docs/TESTNET.md) or [`docs/MAINNET.md`](docs/MAINNET.md).
 
 ## What it does
 
-- Runs a local admin UI (default `http://127.0.0.1:3000`)
-- Lets you choose **Testnet** or **Mainnet**
-- Auto-generates `WQC_NODE_PRIVATE_KEY` on first launch
-- **Testnet**: paste your dashboard operator node key, then start `wqc-core` + `wqc-node`
-- **Mainnet**: set a wallet address (mock for now — no P2P connection yet)
-- Proxies `wqc-node` `/status` when mining is active (mock JSON on mainnet)
+- Local admin UI on `127.0.0.1` (default port `3000`)
+- **Testnet**: start/stop `wqc-core` + `wqc-node`, proxy node `/status`, tail logs over WebSocket
+- **Mainnet** (today): wallet-address settings and mock status only — see [`docs/MAINNET.md`](docs/MAINNET.md)
+- Headless / systemd via `auto_start` in `settings.toml` or `--auto-start`
 
 ## Data directory
 
@@ -32,51 +56,22 @@ Contents:
 - `wqc-core.sock` — Unix socket (macOS/Linux only)
 - `node.db` — SQLite state for `wqc-node`
 
-On first launch, `settings.toml` is created automatically with defaults. To pre-seed or edit by hand, copy the example:
+On first launch, `settings.toml` is created automatically with defaults. To pre-seed or edit by hand:
 
 ```bash
 mkdir -p "$HOME/.local/share/wqc-miner"   # Linux example
 cp settings.toml.example "$HOME/.local/share/wqc-miner/settings.toml"
 ```
 
-## Binary layout (release)
-
-Place sibling binaries next to the launcher:
-
-```text
-wqc-miner(.exe)
-bin/
-  wqc-core(.exe)
-  wqc-node(.exe)
-```
-
-Or set `WQC_MINER_BIN_DIR` / `--bin-dir`, or put both binaries on `PATH`.
-
-## Development
-
-Build `wqc-core` and `wqc-node` from the sibling repos, then point the miner at them:
-
-```bash
-# from world-qc monorepo root
-cargo build --release -p wqc-core -p wqc-node
-
-export WQC_MINER_BIN_DIR="../target/release"   # adjust if needed
-cargo run -p wqc-miner -- --bin-dir "$WQC_MINER_BIN_DIR"
-```
-
-Open `http://127.0.0.1:3000`, pick **Testnet** or **Mainnet**, save settings, then **Start mining**.
-
-For testnet, paste your operator node key from [testnet.world-qc.io](https://testnet.world-qc.io).
-
 ## Headless / Linux auto-start
 
-The admin UI is plain HTTP on `127.0.0.1` — no display server is required. For servers and systemd:
+The admin UI is plain HTTP on `127.0.0.1` — no display server is required.
 
-1. Copy `settings.toml.example` into the data directory and set `node_key` (testnet) or `wallet_address` (mainnet).
+1. Copy `settings.toml.example` into the data directory and set credentials for your network (`node_key` on testnet — see [`docs/TESTNET.md`](docs/TESTNET.md); `wallet_address` on mainnet — see [`docs/MAINNET.md`](docs/MAINNET.md)).
 2. Set `auto_start = true` in `settings.toml`, **or** pass `--auto-start`.
 3. Keep `tn_backend = "cpu"` on headless hosts unless you have a working GPU/WebGPU stack.
 
-If auto-start fails (missing key, missing binaries), the process stays up and the admin UI remains available so you can fix settings.
+If auto-start fails (missing credentials, missing binaries), the process stays up and the admin UI remains available so you can fix settings.
 
 Example systemd unit:
 
@@ -109,110 +104,84 @@ Remote admin access: prefer an SSH tunnel (`ssh -L 3000:127.0.0.1:3000 …`) rat
 
 On Windows, `wqc-core` reads `WQC_CORE_TCP_PORT` (default `3000`; miner defaults to `13000` to avoid clashing with the admin UI on `3000`).
 
-## Environment (injected by launcher, testnet only)
+## Binary layout (release)
 
-| Variable | Set by miner |
-|----------|----------------|
-| `WQC_NODE_PRIVATE_KEY` | auto-generated key file |
-| `WQC_TESTNET_NODE_KEY` | settings UI (testnet node key) |
-| `WQC_BOOTSTRAP_URLS` | settings (comma-separated) |
-| `WQC_CORE_URL` | derived from data dir / TCP port |
-| `WQC_MAX_MEMORY_GB` | settings |
-| `WQC_TN_BACKEND` | settings (`cpu` or `webgpu`) |
-| `WQC_P2P_LISTEN_PORT` | settings |
-| `WQC_HTTP_PORT` | settings |
-| `WQC_DATABASE_URL` | `sqlite:{data_dir}/node.db` |
+Release bundles ship:
 
-Optional env vars set **before** launching `wqc-miner` are forwarded to `wqc-core` when present (advanced tuning — most miners can ignore):
+```text
+wqc-miner(.exe)
+bin/
+  wqc-core(.exe)
+  wqc-node(.exe)
+```
 
-| Variable | Forwarded to | Notes |
-|----------|--------------|-------|
-| `WQC_MPS_MAX_BOND_DIM` | `wqc-core` | MPS bond-dimension ceiling (default `128` in core). See [`wqc-core` `doc/tn-engine.md`](https://github.com/world-qc/wqc-core/blob/main/doc/tn-engine.md). |
-| `WQC_PCS_MEMORY_POLICY` | `wqc-core` | `refuse` or `spill` |
-| `WQC_PCS_MMCS_GROUP_CHUNK` | `wqc-core` | PCS prove chunk size |
-| `WQC_PCS_MEMORY_ESTIMATE_SCALE` | `wqc-core` | Memory estimate scale |
-| `WQC_PCS_TIMEOUT_SECS` | `wqc-node` | PCS open-call timeout |
+For local builds, place sibling binaries next to the launcher, set `WQC_MINER_BIN_DIR` / `--bin-dir`, or put both on `PATH`.
 
-## API (admin)
+## Admin API
 
-The admin API **binds to localhost and has no authentication** — anything that can reach
-the port can rewrite settings and control mining. Do not expose the port.
+The admin API **binds to localhost and has no authentication** — anything that can reach the port can rewrite settings and control mining. Do not expose the port.
 
 | Method | Path | Description |
 |--------|------|-------------|
 | GET | `/` | Bundled admin UI (assets under `/static`) |
 | GET | `/api/status` | Mining + settings summary; includes `mining.issues[]` |
 | GET/PUT | `/api/settings` | Read/update settings (partial update; secrets write-only) |
-| POST | `/api/mining/start` | Start (testnet: core → node; mainnet: mock). Errors may include `code` |
+| POST | `/api/mining/start` | Start mining (testnet: core → node; mainnet: mock until P2P ships) |
 | POST | `/api/mining/stop` | Stop node → core (or mock) |
-| GET | `/api/node-status` | Proxy `wqc-node` `/status` (mock on mainnet) |
-| WS | `/api/logs/ws?source=core\|node&lines=200` | Initial log tail (`hello`) then live `line` events |
+| GET | `/api/node-status` | Proxy `wqc-node` `/status` (mock on mainnet today) |
+| WS | `/api/logs/ws?source=core\|node&lines=200` | Log tail + live stream |
 
-### Semantics worth knowing
+`PUT /api/settings` clamps `max_memory_gb` to `[1.0, host_max_memory_gb]`. `node_key` and `wallet_address` are write-only.
 
-- **`PUT /api/settings`:** every field is optional. `max_memory_gb` is clamped server-side to
-  `[1.0, host_max_memory_gb]`, so the stored value may differ from what was sent. `node_key`
-  and `wallet_address` are write-only; reads report only `node_key_set` / `wallet_address_set`.
-- **`GET /api/status` → `core_tn`:** present only when `wqc-core` is running **and** answered
-  `/sysinfo`. `null` means unknown, not “CPU backend”.
-- **`GET /api/node-status`:** when `wqc-node` is not running (or mainnet mock is inactive),
-  returns `400` rather than an empty success.
-- **`WS /api/logs/ws`:** frames are JSON text discriminated by `type` — one `hello` (tail),
-  then `line` events, or a terminal `error`. Unknown `source` yields an `error` frame after
-  upgrade (default `source=core`, `lines` clamped to 1–1000, default 200).
+Network-specific env injection and issue codes: [`docs/TESTNET.md`](docs/TESTNET.md). Core auto-restart on unexpected exit: exponential backoff (up to 10 exits; budget resets after 60s healthy). Node exit stops mining immediately.
 
-Issue codes (`mining.issues[].code` and start errors):
+## Development
 
-| Code | Meaning |
-|------|---------|
-| `node_key_missing` | Testnet selected but no node key is stored |
-| `wallet_missing` | Mainnet selected but no wallet address is stored |
-| `binaries_missing` | `wqc-core` or `wqc-node` executable not found |
-| `bootstrap_unreachable` | No configured bootstrap URL answered |
-| `already_running` | Start requested while mining is active or stopping |
-| `core_spawn_failed` | `wqc-core` could not be launched |
-| `node_spawn_failed` | `wqc-node` could not be launched |
-| `core_unhealthy` | `wqc-core` is running but not answering |
-| `core_exited` | `wqc-core` exited unexpectedly |
-| `core_restarting` | `wqc-core` is being restarted with backoff |
-| `core_restart_failed` | Restart budget exhausted; mining stopped |
-| `node_exited` | `wqc-node` exited, which stops mining immediately |
+Build `wqc-core` and `wqc-node`, then point the miner at them. See [CONTRIBUTING.md](CONTRIBUTING.md) for the full sibling-repo workflow.
 
-While mining, if `wqc-core` exits unexpectedly the miner keeps `wqc-node` running and auto-restarts core with exponential backoff (up to 10 exits). The restart budget resets after core stays healthy for 60s. Exhausted retries set `core_restart_failed` and stop mining. Node exits still stop mining immediately.
+Open `http://127.0.0.1:3000`, select a network, configure credentials, then **Start mining** (testnet only for real P2P today).
 
 ## CI / Release
 
 | Workflow | Trigger | Purpose |
 |----------|---------|---------|
 | [`.github/workflows/ci.yml`](.github/workflows/ci.yml) | push / PR to `main` | `cargo fmt`, `clippy`, `build`, `test` |
-| [`.github/workflows/release.yml`](.github/workflows/release.yml) | tag `v*` or manual dispatch | Build bundled zip / dmg / tar.gz and upload to GitHub Releases |
+| [`.github/workflows/release.yml`](.github/workflows/release.yml) | tag `v*` or manual dispatch | Bundled zip / dmg / tar.gz → GitHub Releases |
 
-Release builds check out sibling repos (`wqc-core`, `wqc-node`, `wqc-stark-engine`) into the same workspace so `wqc-core`'s `[patch]` for `wqc-stark-engine` resolves. `wqc-core` is built with `--features webgpu`.
+Release builds check out sibling repos (`wqc-core`, `wqc-node`, `wqc-stark-engine`) so `wqc-core`'s `[patch]` for `wqc-stark-engine` resolves. `wqc-core` is built with `--features webgpu`.
 
-```bash
-git tag v0.1.0
-git push origin v0.1.0
-```
-
-Artifacts:
-
-- `wqc-miner-windows-x64.zip` — x86_64 Windows
-- `wqc-miner-windows-arm64.zip` — ARM64 Windows (Snapdragon / ARM PCs)
-- `wqc-miner-mac-universal.dmg` — macOS Universal Binary (Apple Silicon + Intel)
-- `wqc-miner-linux-x64.tar.gz` — x86_64 Linux (`x86_64-unknown-linux-gnu`)
-- `wqc-miner-linux-arm64.tar.gz` — ARM64 Linux (`aarch64-unknown-linux-gnu`)
-
-Each bundle contains `wqc-miner` + `bin/wqc-core` + `bin/wqc-node`.
+Artifacts: Windows (x64, arm64), macOS universal `.dmg`, Linux (x64, arm64). Each bundle contains `wqc-miner` + `bin/wqc-core` + `bin/wqc-node`.
 
 ### Provenance (no CA code signing)
 
-WQC does **not** ship commercial CA signatures (Sectigo, GlobalSign, Apple Developer ID, Authenticode). Release assets are attested with [GitHub Artifact Attestations](https://docs.github.com/en/actions/security-guides/using-artifact-attestations-to-establish-provenance-for-builds) (SLSA provenance via Sigstore) in the release workflow.
+WQC does **not** ship commercial CA signatures (Sectigo, GlobalSign, Apple Developer ID, Authenticode). Release assets are attested with [GitHub Artifact Attestations](https://docs.github.com/en/actions/security-guides/using-artifact-attestations-to-establish-provenance-for-builds) (SLSA provenance via Sigstore).
 
 ```bash
 gh attestation verify wqc-miner-linux-x64.tar.gz -R world-qc/wqc-miner
 ```
 
 OS SmartScreen / Gatekeeper may still warn; use attestation verify as the trust path.
+
+## Upcoming
+
+- Mainnet P2P mining (replacing mock UI — see [`docs/MAINNET.md`](docs/MAINNET.md)).
+- On-chain economic layer (orchestrator / L2).
+
+## Documentation
+
+- [`docs/TESTNET.md`](docs/TESTNET.md) — testnet operator guide
+- [`docs/MAINNET.md`](docs/MAINNET.md) — mainnet operator guide (placeholder)
+- [`settings.toml.example`](settings.toml.example) — configurable fields and defaults
+- [`wqc-node` `docs/OPERATIONS.md`](https://github.com/world-qc/wqc-node/blob/main/docs/OPERATIONS.md) — P2P worker lifecycle and troubleshooting
+- [`wqc-core` README](https://github.com/world-qc/wqc-core/blob/main/README.md) — compute engine and advanced core env
+- [wqc-docs `spec/architecture-current.md`](https://github.com/world-qc/wqc-docs/blob/main/spec/architecture-current.md) — swarm topology and economy
+
+## Requirements
+
+- **OS**: Windows 10+, macOS 11+, or Linux x64/arm64 (see release artifacts)
+- **RAM**: `max_memory_gb` in settings (default: host RAM minus reserve). See [`wqc-node` README](https://github.com/world-qc/wqc-node/blob/main/README.md#environment-variables) for how this maps to advertised qubit capability.
+- **Network**: outbound HTTPS to bootstrap URL; inbound P2P on `p2p_listen_port` when mining on a network that requires it
+- **Rust** 1.95+ only if building from source (see `AGENTS.md`)
 
 ## Contributing
 

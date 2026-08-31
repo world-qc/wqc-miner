@@ -31,17 +31,38 @@ cd wqc-miner
 cargo build
 ```
 
-### Run locally
+### Run locally (full stack)
 
-From the `world-qc` monorepo root (or with `WQC_MINER_BIN_DIR` pointing at release binaries):
+Public repos are **separate git checkouts**, not one Cargo workspace — so `cargo build -p wqc-core -p wqc-node` from a parent folder does not apply. Build each crate from its own directory (same pattern as [`.github/workflows/release.yml`](.github/workflows/release.yml)).
+
+Clone siblings (`wqc-stark-engine` must sit next to `wqc-core` for its `[patch]`):
 
 ```bash
-cargo build --release -p wqc-core -p wqc-node
-export WQC_MINER_BIN_DIR="../target/release"
-cargo run -p wqc-miner -- --bin-dir "$WQC_MINER_BIN_DIR"
+git clone https://github.com/world-qc/wqc-miner.git
+git clone https://github.com/world-qc/wqc-core.git
+git clone https://github.com/world-qc/wqc-node.git
+git clone https://github.com/world-qc/wqc-stark-engine.git
+
+export CARGO_TARGET_DIR="$HOME/wqc-target"   # optional; shared output dir like CI
+
+(cd wqc-core && cargo build --release --features webgpu)
+(cd wqc-node && cargo build --release)
+
+export WQC_MINER_BIN_DIR="$CARGO_TARGET_DIR/release"
+(cd wqc-miner && cargo run -- --bin-dir "$WQC_MINER_BIN_DIR")
 ```
 
-Open `http://127.0.0.1:3000` for the admin UI. See [README.md](README.md) for settings, data directory layout, and platform notes.
+Without `CARGO_TARGET_DIR`, copy both binaries into one directory instead:
+
+```bash
+mkdir -p ~/wqc-bins
+cp wqc-core/target/release/wqc-core ~/wqc-bins/
+cp wqc-node/target/release/wqc-node ~/wqc-bins/
+export WQC_MINER_BIN_DIR=~/wqc-bins
+(cd wqc-miner && cargo run -- --bin-dir "$WQC_MINER_BIN_DIR")
+```
+
+Open `http://127.0.0.1:3000` for the admin UI. For end-to-end mining tests, use testnet — see [`docs/TESTNET.md`](docs/TESTNET.md). See [README.md](README.md) for settings, data directory layout, and platform notes.
 
 ## Making Changes
 
