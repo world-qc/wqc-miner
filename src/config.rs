@@ -106,7 +106,7 @@ fn default_bootstrap_urls() -> Vec<String> {
 pub fn default_bootstrap_urls_for(network: &Network) -> Vec<String> {
     match network {
         Network::Testnet => vec!["https://testnet.world-qc.io/api/v1/p2p/bootstrap".to_string()],
-        Network::Mainnet => vec!["https://world-qc.io/api/v1/p2p/bootstrap".to_string()],
+        Network::Mainnet => vec!["https://mainnet.world-qc.io/api/v1/p2p/bootstrap".to_string()],
     }
 }
 

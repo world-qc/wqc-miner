@@ -1,6 +1,6 @@
 # wqc-miner — Mainnet
 
-Operator guide for **mainnet** (`world-qc.io`). Shared launcher behavior is in the [README](../README.md).
+Operator guide for **mainnet** (`mainnet.world-qc.io`). Shared launcher behavior is in the [README](../README.md).
 
 ## Status
 
@@ -28,4 +28,6 @@ Until then, use [TESTNET.md](TESTNET.md) to run a worker on public testnet.
 2. Enter a wallet address and save settings.
 3. **Start mining** activates the mock path only (no swarm connection).
 
-Default bootstrap in [`settings.toml.example`](../settings.toml.example) points at `https://world-qc.io/api/v1/p2p/bootstrap` for when mainnet worker mode is enabled.
+Default bootstrap in [`settings.toml.example`](../settings.toml.example) / UI defaults points at
+`https://mainnet.world-qc.io/api/v1/p2p/bootstrap` for when mainnet worker mode is enabled.
+Marketing site remains `https://world-qc.io`.
