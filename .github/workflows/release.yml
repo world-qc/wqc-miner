@@ -3,11 +3,13 @@ name: Release
 on:
   push:
     tags:
-      - "v*"
+      # Policy: SemVer vMAJOR.MINOR.PATCH (see README). Glob is approximate;
+      # `check-tag` rejects non-SemVer tags before builds run.
+      - "v*.*.*"
   workflow_dispatch:
     inputs:
       tag:
-        description: "Release tag (e.g. v0.1.0)"
+        description: "Release tag (SemVer, e.g. v0.1.0)"
         required: true
         type: string
 
@@ -20,8 +22,57 @@ env:
   CARGO_INCREMENTAL: 0
 
 jobs:
+  check-tag:
+    name: Validate SemVer tag
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.tag.outputs.value }}
+    steps:
+      - name: Checkout wqc-miner
+        uses: actions/checkout@v4
+        with:
+          # Tag push: the tagged commit. workflow_dispatch: the run's SHA.
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.sha || github.ref }}
+
+      - name: Resolve and validate tag
+        id: tag
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TAG="${{ inputs.tag }}"
+          else
+            TAG="${GITHUB_REF#refs/tags/}"
+          fi
+          # Bundle version: SemVer with leading v (no pre-release suffix yet).
+          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Invalid tag '$TAG'. Use vMAJOR.MINOR.PATCH (e.g. v0.1.0)." >&2
+            exit 1
+          fi
+          EXPECTED="${TAG#v}"
+          CARGO_VER="$(awk '
+            /^\[package\]/ { in_pkg = 1; next }
+            /^\[/ { in_pkg = 0 }
+            in_pkg && $1 == "version" {
+              gsub(/"/, "", $3)
+              print $3
+              exit
+            }
+          ' Cargo.toml)"
+          if [[ -z "$CARGO_VER" ]]; then
+            echo "Could not read version from Cargo.toml [package]" >&2
+            exit 1
+          fi
+          if [[ "$CARGO_VER" != "$EXPECTED" ]]; then
+            echo "Tag '$TAG' does not match Cargo.toml version '$CARGO_VER' (expected v$CARGO_VER)." >&2
+            exit 1
+          fi
+          echo "OK: tag $TAG matches Cargo.toml version $CARGO_VER"
+          echo "value=$TAG" >> "$GITHUB_OUTPUT"
+
   build-windows:
     name: ${{ matrix.artifact_name }}
+    needs: [check-tag]
     runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
@@ -124,6 +175,7 @@ jobs:
 
   build-mac-universal:
     name: wqc-miner-mac-universal
+    needs: [check-tag]
     runs-on: macos-14
     steps:
       - name: Checkout wqc-miner
@@ -228,6 +280,7 @@ jobs:
 
   build-linux:
     name: ${{ matrix.artifact_name }}
+    needs: [check-tag]
     runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
@@ -332,7 +385,7 @@ jobs:
 
   release:
     name: Publish GitHub Release
-    needs: [build-windows, build-mac-universal, build-linux]
+    needs: [check-tag, build-windows, build-mac-universal, build-linux]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -343,16 +396,6 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: dist
-
-      - name: Resolve release tag
-        id: tag
-        shell: bash
-        run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "value=${{ inputs.tag }}" >> "$GITHUB_OUTPUT"
-          else
-            echo "value=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
-          fi
 
       - name: Collect release asset paths
         id: assets
@@ -384,8 +427,8 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.tag.outputs.value }}
-          name: ${{ steps.tag.outputs.value }}
+          tag_name: ${{ needs.check-tag.outputs.tag }}
+          name: ${{ needs.check-tag.outputs.tag }}
           generate_release_notes: true
           body: |
             ## Verify provenance

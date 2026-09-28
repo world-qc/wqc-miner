@@ -111,6 +111,18 @@ A good pull request:
 
 Maintainers may request changes or suggest an alternative approach. Once approved, your contribution will be merged.
 
+## Releases
+
+Maintainers cut operator bundles by tagging **`vMAJOR.MINOR.PATCH`** (SemVer + leading `v`), aligned with `Cargo.toml` `version` (the workflow fails if they differ). Example:
+
+```bash
+# after bumping version in Cargo.toml / Cargo.lock
+git tag -a v0.1.0 -m "v0.1.0"
+git push origin v0.1.0
+```
+
+That push runs [`.github/workflows/release.yml`](.github/workflows/release.yml). See [README — CI / Release](README.md#ci--release) for bump meaning and attestation.
+
 ## Licensing
 
 By contributing, you agree that your contributions will be licensed under the same terms as the project: the [GNU General Public License v3.0](LICENSE).

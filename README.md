@@ -146,7 +146,9 @@ Open `http://127.0.0.1:3000`, select a network, configure credentials, then **St
 | Workflow | Trigger | Purpose |
 |----------|---------|---------|
 | [`.github/workflows/ci.yml`](.github/workflows/ci.yml) | push / PR to `main` | `cargo fmt`, `clippy`, `build`, `test` |
-| [`.github/workflows/release.yml`](.github/workflows/release.yml) | tag `v*` or manual dispatch | Bundled zip / dmg / tar.gz → GitHub Releases |
+| [`.github/workflows/release.yml`](.github/workflows/release.yml) | tag `vMAJOR.MINOR.PATCH` or manual dispatch | Bundled zip / dmg / tar.gz → GitHub Releases |
+
+**Version tags** use SemVer with a leading `v`, matching `Cargo.toml` `version` (e.g. `0.1.0` → tag `v0.1.0`). The release workflow checks that the tag equals `v` + `[package].version` before building. While still in `0.y.z`, MINOR may include breaking changes; PATCH is for compatible fixes. This version is the **release bundle**, not a lockstep with `wqc-core` / `wqc-node` crate versions.
 
 Release builds check out sibling repos (`wqc-core`, `wqc-node`, `wqc-stark-engine`) so `wqc-core`'s `[patch]` for `wqc-stark-engine` resolves. `wqc-core` is built with `--features webgpu`.
 
