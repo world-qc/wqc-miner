@@ -41,7 +41,8 @@ jobs:
         with:
           path: wqc-miner
 
-      # Sibling crates are private; GitHub App needs Contents: Read on each repo.
+      # App token for sibling checkouts (works if a listed repo is private or public).
+      # Grant the App Contents: Read on each repo in `repositories:` below.
       - name: Generate token for private deps
         id: app-token
         uses: actions/create-github-app-token@v2
@@ -130,7 +131,8 @@ jobs:
         with:
           path: wqc-miner
 
-      # Sibling crates are private; GitHub App needs Contents: Read on each repo.
+      # App token for sibling checkouts (works if a listed repo is private or public).
+      # Grant the App Contents: Read on each repo in `repositories:` below.
       - name: Generate token for private deps
         id: app-token
         uses: actions/create-github-app-token@v2
@@ -244,7 +246,8 @@ jobs:
         with:
           path: wqc-miner
 
-      # Sibling crates are private; GitHub App needs Contents: Read on each repo.
+      # App token for sibling checkouts (works if a listed repo is private or public).
+      # Grant the App Contents: Read on each repo in `repositories:` below.
       - name: Generate token for private deps
         id: app-token
         uses: actions/create-github-app-token@v2
