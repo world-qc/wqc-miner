@@ -40,6 +40,14 @@
       margin-bottom: 1rem;
     }
     h2 { font-size: 1rem; margin: 0 0 1rem; }
+    .section-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+      margin-bottom: 1rem;
+    }
+    .section-head h2 { margin: 0; }
     label {
       display: block;
       font-size: 0.85rem;
@@ -178,7 +186,6 @@
       <div class="actions" style="margin-top: 1rem;">
         <button class="primary" id="btn-start">Start mining</button>
         <button class="danger" id="btn-stop">Stop</button>
-        <button class="secondary" id="btn-refresh">Refresh node status</button>
       </div>
       <p id="message"></p>
     </section>
@@ -269,7 +276,10 @@
     </section>
 
     <section>
-      <h2>Node /status</h2>
+      <div class="section-head">
+        <h2>Node /status</h2>
+        <button type="button" class="secondary" id="btn-refresh">Refresh node status</button>
+      </div>
       <pre id="node-json">Not running</pre>
     </section>
   </main>
@@ -478,6 +488,10 @@
       applyIssues(status.issues || []);
     }
 
+    function nodeStatusExpected(mining, settings) {
+      return Boolean(mining && mining.mining && (mining.node_running || settings.mainnet_mock));
+    }
+
     async function refresh() {
       const data = await api("/api/status");
       applyMiningStatus(data.mining);
@@ -487,15 +501,33 @@
         data.settings,
         data.core_tn
       );
+      await syncNodePanel(data.mining, data.settings);
     }
 
-    async function refreshNodeStatus() {
+    // wqc-node binds /status only after bootstrap, so the first fetch after
+    // Start often fails. Keep "Starting…" until a payload arrives; later
+    // failures replace a payload we already showed.
+    async function refreshNodeStatus(options = {}) {
       try {
         const data = await api("/api/node-status");
         $("node-json").textContent = JSON.stringify(data, null, 2);
       } catch (err) {
-        $("node-json").textContent = err.message;
+        const current = $("node-json").textContent;
+        const waiting = current === "Not running" || current === "Starting…";
+        if (options.quietStartup && waiting) {
+          $("node-json").textContent = "Starting…";
+        } else {
+          $("node-json").textContent = err.message;
+        }
       }
+    }
+
+    async function syncNodePanel(mining, settings) {
+      if (!nodeStatusExpected(mining, settings)) {
+        $("node-json").textContent = "Not running";
+        return;
+      }
+      await refreshNodeStatus({ quietStartup: true });
     }
 
     $("network").addEventListener("change", (e) => {
@@ -545,7 +577,7 @@
         const data = await api("/api/mining/start", { method: "POST" });
         applyMiningStatus(data.status);
         message(data.status.message || "Mining started.");
-        refreshNodeStatus();
+        await refresh();
         connectLogWs(logSource);
       } catch (err) {
         message(err.message, true);
