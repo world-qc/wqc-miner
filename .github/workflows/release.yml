@@ -74,6 +74,12 @@ jobs:
     name: ${{ matrix.artifact_name }}
     needs: [check-tag]
     runs-on: ${{ matrix.runner }}
+    env:
+      # windows-msvc links the dynamic CRT by default, so a stock Windows
+      # install without the VC++ Redistributable fails at startup with
+      # "VCRUNTIME140.dll was not found". Static CRT makes the zip runnable
+      # on Windows 10+ without that installer. UCRT stays an OS component.
+      RUSTFLAGS: -C target-feature=+crt-static
     strategy:
       fail-fast: false
       matrix:
@@ -137,6 +143,9 @@ jobs:
             wqc-miner
             wqc-core
             wqc-node
+          # C objects (cc crate) bake /MD vs /MT at compile time. Key the
+          # cache on RUSTFLAGS so a dynamic-CRT cache is not reused.
+          env-vars: RUSTFLAGS
 
       - name: Build wqc-core (webgpu)
         working-directory: wqc-core
@@ -159,7 +168,86 @@ jobs:
           Copy-Item "$targetDir/wqc-miner.exe" "$staging/"
           Copy-Item "$targetDir/wqc-core.exe" "$staging/bin/"
           Copy-Item "$targetDir/wqc-node.exe" "$staging/bin/"
-          Copy-Item wqc-miner/LICENSE, wqc-miner/settings.toml.example, wqc-miner/README.md "$staging/"
+          Copy-Item wqc-miner/LICENSE, wqc-miner/settings.toml.example "$staging/"
+          Copy-Item wqc-miner/packaging/README.md "$staging/README.md"
+
+      - name: Reject dynamic VC++ runtime
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          # Import DLL names that mean the user still needs the VC++ redist.
+          $forbidden = @(
+            "VCRUNTIME140.dll",
+            "VCRUNTIME140_1.dll",
+            "MSVCP140.dll",
+            "MSVCP140_1.dll",
+            "MSVCP140_2.dll",
+            "CONCRT140.dll"
+          )
+          function Get-PeImportDlls([string]$Path) {
+            $b = [System.IO.File]::ReadAllBytes($Path)
+            function U16([int]$o) { [BitConverter]::ToUInt16($b, $o) }
+            function U32([int]$o) { [BitConverter]::ToUInt32($b, $o) }
+            $pe = U32 0x3C
+            if ([Text.Encoding]::ASCII.GetString($b, $pe, 4) -ne "PE`0`0") {
+              throw "$Path is not a PE file"
+            }
+            $coff = $pe + 4
+            $sections = U16 ($coff + 2)
+            $optSize = U16 ($coff + 16)
+            $opt = $coff + 20
+            $magic = U16 $opt
+            # DataDirectory[1] is the import table. PE32+ directory offset is 112;
+            # PE32 is 96, both relative to the optional header.
+            $importDir = if ($magic -eq 0x20B) { $opt + 112 + 8 } else { $opt + 96 + 8 }
+            $importRva = U32 $importDir
+            if ($importRva -eq 0) { return @() }
+            $sec = $opt + $optSize
+            function RvaToOff([uint32]$rva) {
+              for ($i = 0; $i -lt $sections; $i++) {
+                $s = $sec + ($i * 40)
+                $va = U32 ($s + 12)
+                $rawSize = U32 ($s + 16)
+                $raw = U32 ($s + 20)
+                $span = [Math]::Max($rawSize, (U32 ($s + 8)))
+                if ($rva -ge $va -and $rva -lt ($va + $span)) {
+                  return [int]($raw + ($rva - $va))
+                }
+              }
+              throw "RVA $rva not in any section of $Path"
+            }
+            $names = @()
+            $desc = RvaToOff $importRva
+            while ($true) {
+              $nameRva = U32 ($desc + 12)
+              if ($nameRva -eq 0) { break }
+              $nameOff = RvaToOff $nameRva
+              $end = $nameOff
+              while ($b[$end] -ne 0) { $end++ }
+              $names += [Text.Encoding]::ASCII.GetString($b, $nameOff, $end - $nameOff)
+              $desc += 20
+            }
+            return $names
+          }
+          $failed = $false
+          foreach ($exe in @(
+            "dist/${{ matrix.artifact_name }}/wqc-miner.exe",
+            "dist/${{ matrix.artifact_name }}/bin/wqc-core.exe",
+            "dist/${{ matrix.artifact_name }}/bin/wqc-node.exe"
+          )) {
+            $imports = Get-PeImportDlls (Resolve-Path $exe)
+            Write-Host "---- $exe ----"
+            $imports | ForEach-Object { Write-Host "  $_" }
+            foreach ($dll in $imports) {
+              foreach ($bad in $forbidden) {
+                if ($dll.Equals($bad, [StringComparison]::OrdinalIgnoreCase)) {
+                  Write-Host "::error::$exe imports $dll (dynamic VC++ CRT)"
+                  $failed = $true
+                }
+              }
+            }
+          }
+          if ($failed) { exit 1 }
 
       - name: Package zip
         shell: pwsh
@@ -258,7 +346,8 @@ jobs:
             "${CARGO_TARGET_DIR}/x86_64-apple-darwin/release/wqc-node" \
             -output "${STAGING}/bin/wqc-node"
           chmod +x "${STAGING}/wqc-miner" "${STAGING}/bin/wqc-core" "${STAGING}/bin/wqc-node"
-          cp wqc-miner/LICENSE wqc-miner/settings.toml.example wqc-miner/README.md "${STAGING}/"
+          cp wqc-miner/LICENSE wqc-miner/settings.toml.example "${STAGING}/"
+          cp wqc-miner/packaging/README.md "${STAGING}/README.md"
           file "${STAGING}/wqc-miner"
           file "${STAGING}/bin/wqc-core"
           file "${STAGING}/bin/wqc-node"
@@ -373,7 +462,8 @@ jobs:
           cp "${TARGET_DIR}/wqc-core" "${STAGING}/bin/"
           cp "${TARGET_DIR}/wqc-node" "${STAGING}/bin/"
           chmod +x "${STAGING}/wqc-miner" "${STAGING}/bin/wqc-core" "${STAGING}/bin/wqc-node"
-          cp wqc-miner/LICENSE wqc-miner/settings.toml.example wqc-miner/README.md "${STAGING}/"
+          cp wqc-miner/LICENSE wqc-miner/settings.toml.example "${STAGING}/"
+          cp wqc-miner/packaging/README.md "${STAGING}/README.md"
           tar -czf "dist/${{ matrix.artifact_name }}.tar.gz" -C dist "${{ matrix.artifact_name }}"
 
       - name: Upload artifact
