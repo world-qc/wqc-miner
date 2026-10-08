@@ -113,7 +113,12 @@ wqc-miner(.exe)
 bin/
   wqc-core(.exe)
   wqc-node(.exe)
+settings.toml.example
+LICENSE
+README.md
 ```
+
+The archive `README.md` is [`packaging/README.md`](packaging/README.md), written for people who only have the binaries. This repository README is not shipped.
 
 For local builds, place sibling binaries next to the launcher, set `WQC_MINER_BIN_DIR` / `--bin-dir`, or put both on `PATH`.
 
@@ -152,7 +157,7 @@ Open `http://127.0.0.1:3000`, select a network, configure credentials, then **St
 
 Release builds check out sibling repos (`wqc-core`, `wqc-node`, `wqc-stark-engine`) so `wqc-core`'s `[patch]` for `wqc-stark-engine` resolves. `wqc-core` is built with `--features webgpu`.
 
-Artifacts: Windows (x64, arm64), macOS universal `.dmg`, Linux (x64, arm64). Each bundle contains `wqc-miner` + `bin/wqc-core` + `bin/wqc-node`.
+Artifacts: Windows (x64, arm64), macOS universal `.dmg`, Linux (x64, arm64). Each bundle contains `wqc-miner` + `bin/wqc-core` + `bin/wqc-node`. Windows binaries statically link the Visual C++ runtime, so the zip runs on Windows 10+ without the VC++ Redistributable (`VCRUNTIME140.dll`).
 
 ### Provenance (no CA code signing)
 
