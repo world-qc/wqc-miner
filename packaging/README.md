@@ -40,11 +40,14 @@ Checking **Unblock** on the zip before you extract it covers every file inside.
 
 ### macOS
 
-Gatekeeper may say the developer cannot be verified.
+Gatekeeper may say the developer cannot be verified. It asks once per program, so `wqc-miner`, `bin/wqc-core`, and `bin/wqc-node` each need their own allow.
 
 1. Copy this folder out of the disk image onto the Mac.
-2. Control-click `wqc-miner` and choose **Open**, then **Open** in the next dialog.
-3. If macOS blocks `bin/wqc-core` or `bin/wqc-node` when mining starts, open Terminal, `cd` to this folder, and run:
+2. Control-click `wqc-miner` and choose **Open**. The dialog that follows only has **Done**. That closes the warning and does not allow the program.
+3. Open **System Settings → Privacy & Security**. When it says the program was blocked, click **Open Anyway**.
+4. Start mining. When macOS blocks `bin/wqc-core`, repeat steps 2 and 3 for that program. Do the same for `bin/wqc-node`.
+
+To allow all three at once, open Terminal, `cd` to this folder, and run:
 
 ```bash
 xattr -dr com.apple.quarantine .
