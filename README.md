@@ -129,6 +129,7 @@ The admin API **binds to localhost and has no authentication** — anything that
 | Method | Path | Description |
 |--------|------|-------------|
 | GET | `/` | Bundled admin UI (assets under `/static`) |
+| GET | `/logs` | Full-page core/node log tail (`?source=core` or `node`) |
 | GET | `/api/status` | Mining + settings summary; includes `mining.issues[]` |
 | GET/PUT | `/api/settings` | Read/update settings (partial update; secrets write-only) |
 | POST | `/api/mining/start` | Start mining (testnet: core → node; mainnet: mock until P2P ships) |

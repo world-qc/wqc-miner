@@ -63,7 +63,7 @@ Use the filename you downloaded. You still need the SmartScreen or Gatekeeper st
 ## Start
 
 1. Run `wqc-miner` from this folder (`wqc-miner.exe` on Windows).
-2. Open <http://127.0.0.1:3000>.
+2. Open <http://127.0.0.1:3000>. Logs are on <http://127.0.0.1:3000/logs>.
 3. **Testnet:** select Testnet, paste the operator **Node Key** from <https://testnet.world-qc.io>, then **Start mining**. Start stores the form.
 4. **Mainnet:** the page stores a wallet address and shows mock status only. P2P mining is not connected yet.
 
