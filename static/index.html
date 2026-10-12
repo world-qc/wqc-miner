@@ -339,12 +339,36 @@
       return `TN backend: ${requested} (core starting…)`;
     }
 
-    function applySettings(view) {
+    // Last values written from the server. A field the operator changed
+    // (current !== applied) is left alone when the status poll refreshes.
+    let appliedForm = null;
+
+    function formSnapshot() {
+      return {
+        network: $("network").value,
+        bootstrap_urls: $("bootstrap_urls").value,
+        max_memory_gb: $("max_memory_gb").value,
+        p2p_listen_port: $("p2p_listen_port").value,
+        node_http_port: $("node_http_port").value,
+        core_tcp_port: $("core_tcp_port").value,
+        tn_backend: $("tn_backend").value,
+        auto_start: $("auto_start").checked,
+      };
+    }
+
+    function sameSetting(a, b) {
+      if (typeof a === "boolean" || typeof b === "boolean") return Boolean(a) === Boolean(b);
+      const as = String(a);
+      const bs = String(b);
+      if (as.trim() !== "" && bs.trim() !== "" && !Number.isNaN(Number(as)) && !Number.isNaN(Number(bs))) {
+        return Number(as) === Number(bs);
+      }
+      return as === bs;
+    }
+
+    function applySettings(view, options = {}) {
       $("data-dir").textContent = view.data_dir;
       $("core-url").textContent = view.core_url;
-      $("network").value = view.network;
-      $("bootstrap_urls").value = (view.bootstrap_urls || []).join("\n");
-      $("max_memory_gb").value = view.max_memory_gb;
       if (view.host_max_memory_gb) {
         const input = $("max_memory_gb");
         input.max = String(view.host_max_memory_gb);
@@ -356,12 +380,35 @@
           ? `Host RAM: ${total} GiB — max ${view.host_max_memory_gb} GiB (${reserve} GiB reserved for OS).`
           : "Host reserve: 1 GiB (<16 GiB RAM) or 2 GiB (≥16 GiB).";
       }
-      $("p2p_listen_port").value = view.p2p_listen_port;
-      $("node_http_port").value = view.node_http_port;
-      $("core_tcp_port").value = view.core_tcp_port;
-      $("tn_backend").value = view.tn_backend || "cpu";
-      $("auto_start").checked = !!view.auto_start;
-      toggleNetworkFields(view.network);
+      const next = {
+        network: view.network,
+        bootstrap_urls: (view.bootstrap_urls || []).join("\n"),
+        max_memory_gb: view.max_memory_gb,
+        p2p_listen_port: view.p2p_listen_port,
+        node_http_port: view.node_http_port,
+        core_tcp_port: view.core_tcp_port,
+        tn_backend: view.tn_backend || "cpu",
+        auto_start: !!view.auto_start,
+      };
+      const current = formSnapshot();
+      const keepEdits = !!options.keepEdits && appliedForm;
+      const dirty = (key) => keepEdits && !sameSetting(current[key], appliedForm[key]);
+      if (!dirty("network")) $("network").value = next.network;
+      if (!dirty("bootstrap_urls")) $("bootstrap_urls").value = next.bootstrap_urls;
+      if (!dirty("max_memory_gb")) $("max_memory_gb").value = next.max_memory_gb;
+      if (!dirty("p2p_listen_port")) $("p2p_listen_port").value = next.p2p_listen_port;
+      if (!dirty("node_http_port")) $("node_http_port").value = next.node_http_port;
+      if (!dirty("core_tcp_port")) $("core_tcp_port").value = next.core_tcp_port;
+      if (!dirty("tn_backend")) $("tn_backend").value = next.tn_backend;
+      if (!dirty("auto_start")) $("auto_start").checked = next.auto_start;
+      toggleNetworkFields($("network").value);
+      const recorded = formSnapshot();
+      if (keepEdits) {
+        for (const key of Object.keys(next)) {
+          if (dirty(key)) recorded[key] = appliedForm[key];
+        }
+      }
+      appliedForm = recorded;
       if (!view.node_key_set) {
         $("node_key").placeholder = "Paste operator node key here";
       } else {
@@ -495,7 +542,7 @@
     async function refresh() {
       const data = await api("/api/status");
       applyMiningStatus(data.mining);
-      applySettings(data.settings);
+      applySettings(data.settings, { keepEdits: true });
       $("tn-backend-status").textContent = formatTnBackendLine(
         data.mining,
         data.settings,
