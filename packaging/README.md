@@ -1,10 +1,12 @@
 # WQC Miner
 
-This folder is a release build of the WQC worker launcher. Run `wqc-miner` from here. It starts `bin/wqc-core` and `bin/wqc-node` and serves a local admin page.
+This folder is a release build of the WQC worker launcher. On Windows and Linux, run `wqc-miner` from here. On macOS, open `WQC Miner.app`. It starts `wqc-core` and `wqc-node` and serves a local admin page.
 
 Source code and contributor documentation: <https://github.com/world-qc/wqc-miner>
 
 ## Contents
+
+Windows and Linux:
 
 ```text
 wqc-miner            (wqc-miner.exe on Windows)
@@ -17,6 +19,17 @@ README.md
 
 Keep `bin/` next to `wqc-miner`. The launcher looks there for the other two programs.
 
+macOS disk image:
+
+```text
+WQC Miner.app
+settings.toml.example
+LICENSE
+README.md
+```
+
+Open `WQC Miner.app`. The launcher and the other two programs are inside the app, and the launcher starts them.
+
 ## Requirements
 
 - Windows 10 or later, macOS 11 or later, or Linux (x64 or arm64)
@@ -25,9 +38,9 @@ Keep `bin/` next to `wqc-miner`. The launcher looks there for the other two prog
 
 Windows builds statically link the Visual C++ runtime. Installing the VC++ Redistributable is not required.
 
-## Windows may block the first launch
+## First launch
 
-Windows builds are not Authenticode-signed. macOS builds are signed with Developer ID and notarized by Apple. Linux does not show a signing prompt.
+Windows builds are not Authenticode-signed. The macOS app and disk image are signed with Developer ID and notarized by Apple. Linux does not show a signing prompt.
 
 ### Windows
 
@@ -40,7 +53,9 @@ Checking **Unblock** on the zip before you extract it covers every file inside.
 
 ### macOS
 
-The disk image is signed with Developer ID Application and notarized by Apple. Copy the folder out of the disk image and run `wqc-miner`. Gatekeeper allows `wqc-miner`, `bin/wqc-core`, and `bin/wqc-node` from that image.
+The disk image and `WQC Miner.app` are signed with Developer ID Application and notarized by Apple. Open `WQC Miner.app`. Gatekeeper allows that app. `wqc-core` and `wqc-node` stay inside the app; the launcher starts them.
+
+The Dock icon stays while the admin page is running. To stop the app, quit **WQC Miner** in Activity Monitor.
 
 To check that the archive matches the GitHub release build:
 
@@ -48,11 +63,11 @@ To check that the archive matches the GitHub release build:
 gh attestation verify wqc-miner-linux-x64.tar.gz -R world-qc/wqc-miner
 ```
 
-Use the filename you downloaded. You still need the SmartScreen or Gatekeeper steps above.
+Use the filename you downloaded. On Windows you still need the SmartScreen steps above.
 
 ## Start
 
-1. Run `wqc-miner` from this folder (`wqc-miner.exe` on Windows).
+1. On macOS, open `WQC Miner.app`. On Windows and Linux, run `wqc-miner` from this folder (`wqc-miner.exe` on Windows).
 2. Open <http://127.0.0.1:3000>. Logs are on <http://127.0.0.1:3000/logs>.
 3. **Testnet:** select Testnet, paste the operator **Node Key** from <https://testnet.world-qc.io>, then **Start mining**. Start stores the form.
 4. **Mainnet:** the page stores a wallet address and shows mock status only. P2P mining is not connected yet.
@@ -108,7 +123,7 @@ The admin port has no authentication. Do not bind it on a public address. Use an
 |---------|------------|
 | `node_key_missing` | Select Testnet and paste a Node Key from the dashboard, then start again |
 | `wallet_missing` | Select Mainnet and enter a wallet address, then start again |
-| `binaries_missing` | Run `wqc-miner` from this folder so `bin/` stays beside it |
+| `binaries_missing` | On Windows and Linux, run `wqc-miner` from this folder so `bin/` stays beside it. On macOS, open `WQC Miner.app` and leave the programs inside it |
 | `bootstrap_unreachable` | Check outbound HTTPS to the bootstrap URL in settings |
 | `core_unhealthy` / `core_exited` | Core did not stay up; the launcher retries with backoff |
 | `node_exited` | Node exited; mining stops until you start it again |

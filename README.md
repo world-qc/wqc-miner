@@ -106,7 +106,7 @@ On Windows, `wqc-core` reads `WQC_CORE_TCP_PORT` (default `3000`; miner defaults
 
 ## Binary layout (release)
 
-Release bundles ship:
+Windows and Linux release bundles ship:
 
 ```text
 wqc-miner(.exe)
@@ -117,6 +117,8 @@ settings.toml.example
 LICENSE
 README.md
 ```
+
+The macOS disk image ships `WQC Miner.app` plus the same docs. Inside the app, `Contents/MacOS/wqc-miner` looks for `Contents/MacOS/bin/wqc-core` and `Contents/MacOS/bin/wqc-node`.
 
 The archive `README.md` is [`packaging/README.md`](packaging/README.md), written for people who only have the binaries. This repository README is not shipped.
 
@@ -158,17 +160,17 @@ Open `http://127.0.0.1:3000`, select a network, configure credentials, then **St
 
 Release builds check out sibling repos (`wqc-core`, `wqc-node`, `wqc-stark-engine`) so `wqc-core`'s `[patch]` for `wqc-stark-engine` resolves. `wqc-core` is built with `--features webgpu`.
 
-Artifacts: Windows (x64, arm64), macOS universal `.dmg`, Linux (x64, arm64). Each bundle contains `wqc-miner` + `bin/wqc-core` + `bin/wqc-node`. Windows binaries statically link the Visual C++ runtime, so the zip runs on Windows 10+ without the VC++ Redistributable (`VCRUNTIME140.dll`).
+Artifacts: Windows (x64, arm64), macOS universal `.dmg`, Linux (x64, arm64). Windows and Linux bundles contain `wqc-miner` + `bin/wqc-core` + `bin/wqc-node`. The macOS disk image contains `WQC Miner.app`, with those two programs inside the app. Windows binaries statically link the Visual C++ runtime, so the zip runs on Windows 10+ without the VC++ Redistributable (`VCRUNTIME140.dll`).
 
 ### Signing and provenance
 
-The macOS disk image is signed with Developer ID Application (`Yoshitaka Sato`, team `ZV84T86GTH`) and notarized by Apple. Windows builds are not Authenticode-signed. Every release asset is also attested with [GitHub Artifact Attestations](https://docs.github.com/en/actions/security-guides/using-artifact-attestations-to-establish-provenance-for-builds) (SLSA provenance via Sigstore).
+The macOS app and disk image are signed with Developer ID Application (`Yoshitaka Sato`, team `ZV84T86GTH`) and notarized by Apple. Windows builds are not Authenticode-signed. Every release asset is also attested with [GitHub Artifact Attestations](https://docs.github.com/en/actions/security-guides/using-artifact-attestations-to-establish-provenance-for-builds) (SLSA provenance via Sigstore).
 
 ```bash
 gh attestation verify wqc-miner-linux-x64.tar.gz -R world-qc/wqc-miner
 ```
 
-Windows SmartScreen may still warn. macOS Gatekeeper accepts the notarized disk image. Attestation verify remains the check that the file came from this workflow.
+Windows SmartScreen may still warn. macOS Gatekeeper accepts `WQC Miner.app` from the notarized disk image. Attestation verify remains the check that the file came from this workflow.
 
 ## Upcoming
 

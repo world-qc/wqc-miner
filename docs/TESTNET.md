@@ -4,8 +4,8 @@ Operator guide for **public testnet** (`testnet.world-qc.io`). Shared launcher b
 
 ## Quick start
 
-1. Download a release for your platform from [GitHub Releases](https://github.com/world-qc/wqc-miner/releases) (bundled `wqc-miner` + `bin/wqc-core` + `bin/wqc-node`).
-2. Run `wqc-miner` and open `http://127.0.0.1:3000`.
+1. Download a release for your platform from [GitHub Releases](https://github.com/world-qc/wqc-miner/releases). On macOS, open `WQC Miner.app` from the disk image. On Windows and Linux, the archive contains `wqc-miner` plus `bin/wqc-core` and `bin/wqc-node`.
+2. Open `http://127.0.0.1:3000`.
 3. Select **Testnet**, paste your operator **Node Key** from [testnet.world-qc.io](https://testnet.world-qc.io).
 4. Click **Start mining**. That stores the form, including the Node Key.
 

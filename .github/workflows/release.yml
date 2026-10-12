@@ -352,6 +352,12 @@ jobs:
           file "${STAGING}/bin/wqc-core"
           file "${STAGING}/bin/wqc-node"
 
+      - name: Assemble macOS app
+        run: |
+          set -euo pipefail
+          version=$(sed -n 's/^version = "\([^"]*\)"/\1/p' wqc-miner/Cargo.toml | head -1)
+          wqc-miner/packaging/sign-mac.sh assemble dist/wqc-miner-mac-universal "$version"
+
       - name: Import Developer ID certificate
         env:
           APPLE_CERTIFICATE_P12: ${{ secrets.APPLE_CERTIFICATE_P12 }}
@@ -381,7 +387,7 @@ jobs:
       - name: Sign macOS binaries
         env:
           APPLE_SIGN_IDENTITY: "Developer ID Application: Yoshitaka Sato (ZV84T86GTH)"
-        run: wqc-miner/packaging/sign-mac.sh sign dist/wqc-miner-mac-universal
+        run: wqc-miner/packaging/sign-mac.sh sign "dist/wqc-miner-mac-universal/WQC Miner.app"
 
       - name: Package dmg
         run: |
@@ -396,6 +402,7 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+          APPLE_SIGN_IDENTITY: "Developer ID Application: Yoshitaka Sato (ZV84T86GTH)"
         run: wqc-miner/packaging/sign-mac.sh notarize dist/wqc-miner-mac-universal.dmg
 
       - name: Upload artifact
@@ -561,7 +568,7 @@ jobs:
           body: |
             ## macOS
 
-            The macOS disk image is signed with Developer ID Application and notarized by Apple.
+            The macOS app and disk image are signed with Developer ID Application and notarized by Apple. Open `WQC Miner.app`.
 
             ## Windows
 
