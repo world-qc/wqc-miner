@@ -1,6 +1,6 @@
 [package]
 name = "wqc-miner"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 authors = ["World Quantum Computer Contributors"]
 license = "GPL-3.0"
