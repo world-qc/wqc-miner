@@ -160,15 +160,15 @@ Release builds check out sibling repos (`wqc-core`, `wqc-node`, `wqc-stark-engin
 
 Artifacts: Windows (x64, arm64), macOS universal `.dmg`, Linux (x64, arm64). Each bundle contains `wqc-miner` + `bin/wqc-core` + `bin/wqc-node`. Windows binaries statically link the Visual C++ runtime, so the zip runs on Windows 10+ without the VC++ Redistributable (`VCRUNTIME140.dll`).
 
-### Provenance (no CA code signing)
+### Signing and provenance
 
-WQC does **not** ship commercial CA signatures (Sectigo, GlobalSign, Apple Developer ID, Authenticode). Release assets are attested with [GitHub Artifact Attestations](https://docs.github.com/en/actions/security-guides/using-artifact-attestations-to-establish-provenance-for-builds) (SLSA provenance via Sigstore).
+The macOS disk image is signed with Developer ID Application (`Yoshitaka Sato`, team `ZV84T86GTH`) and notarized by Apple. Windows builds are not Authenticode-signed. Every release asset is also attested with [GitHub Artifact Attestations](https://docs.github.com/en/actions/security-guides/using-artifact-attestations-to-establish-provenance-for-builds) (SLSA provenance via Sigstore).
 
 ```bash
 gh attestation verify wqc-miner-linux-x64.tar.gz -R world-qc/wqc-miner
 ```
 
-OS SmartScreen / Gatekeeper may still warn; use attestation verify as the trust path.
+Windows SmartScreen may still warn. macOS Gatekeeper accepts the notarized disk image. Attestation verify remains the check that the file came from this workflow.
 
 ## Upcoming
 
