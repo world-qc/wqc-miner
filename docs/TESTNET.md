@@ -6,8 +6,8 @@ Operator guide for **public testnet** (`testnet.world-qc.io`). Shared launcher b
 
 1. Download a release for your platform from [GitHub Releases](https://github.com/world-qc/wqc-miner/releases) (bundled `wqc-miner` + `bin/wqc-core` + `bin/wqc-node`).
 2. Run `wqc-miner` and open `http://127.0.0.1:3000`.
-3. Select **Testnet**, paste your operator **Node Key** from [testnet.world-qc.io](https://testnet.world-qc.io), save settings.
-4. Click **Start mining**.
+3. Select **Testnet**, paste your operator **Node Key** from [testnet.world-qc.io](https://testnet.world-qc.io).
+4. Click **Start mining**. That stores the form, including the Node Key.
 
 The launcher auto-generates `WQC_NODE_PRIVATE_KEY` on first launch and writes `settings.toml` under the [data directory](../README.md#data-directory). Adjust **Max memory (GiB)** if needed — this becomes `WQC_MAX_MEMORY_GB` for core and node.
 
@@ -53,7 +53,7 @@ Worker-side P2P troubleshooting: [`wqc-node` `docs/OPERATIONS.md`](https://githu
 
 | Code | Meaning |
 |------|---------|
-| `node_key_missing` | Testnet selected but no node key stored |
+| `node_key_missing` | Testnet selected but the Node key field was empty |
 | `binaries_missing` | `wqc-core` or `wqc-node` not found in bundle / `--bin-dir` |
 | `bootstrap_unreachable` | Bootstrap URL did not answer |
 | `core_unhealthy` / `core_exited` | Core not answering or exited (auto-restart with backoff) |

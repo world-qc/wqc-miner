@@ -541,29 +541,37 @@
       }
     });
 
+    function settingsPayload() {
+      const payload = {
+        network: $("network").value,
+        tn_backend: $("tn_backend").value,
+        bootstrap_urls: $("bootstrap_urls").value.split("\n").map(s => s.trim()).filter(Boolean),
+        max_memory_gb: Number($("max_memory_gb").value),
+        p2p_listen_port: Number($("p2p_listen_port").value),
+        node_http_port: Number($("node_http_port").value),
+        core_tcp_port: Number($("core_tcp_port").value),
+        auto_start: $("auto_start").checked,
+      };
+      const nodeKey = $("node_key").value.trim();
+      const wallet = $("wallet_address").value.trim();
+      if (nodeKey) payload.node_key = nodeKey;
+      if (wallet) payload.wallet_address = wallet;
+      return payload;
+    }
+
+    async function saveSettings() {
+      const view = await api("/api/settings", { method: "PUT", body: JSON.stringify(settingsPayload()) });
+      applySettings(view);
+      $("node_key").value = "";
+      $("wallet_address").value = "";
+      return view;
+    }
+
     $("settings-form").addEventListener("submit", async (e) => {
       e.preventDefault();
       message("");
       try {
-        const network = $("network").value;
-        const payload = {
-          network,
-          tn_backend: $("tn_backend").value,
-          bootstrap_urls: $("bootstrap_urls").value.split("\n").map(s => s.trim()).filter(Boolean),
-          max_memory_gb: Number($("max_memory_gb").value),
-          p2p_listen_port: Number($("p2p_listen_port").value),
-          node_http_port: Number($("node_http_port").value),
-          core_tcp_port: Number($("core_tcp_port").value),
-          auto_start: $("auto_start").checked,
-        };
-        const nodeKey = $("node_key").value.trim();
-        const wallet = $("wallet_address").value.trim();
-        if (nodeKey) payload.node_key = nodeKey;
-        if (wallet) payload.wallet_address = wallet;
-        const view = await api("/api/settings", { method: "PUT", body: JSON.stringify(payload) });
-        applySettings(view);
-        $("node_key").value = "";
-        $("wallet_address").value = "";
+        await saveSettings();
         message("Settings saved.");
         await refresh();
       } catch (err) {
@@ -574,6 +582,7 @@
     $("btn-start").addEventListener("click", async () => {
       message("");
       try {
+        await saveSettings();
         const data = await api("/api/mining/start", { method: "POST" });
         applyMiningStatus(data.status);
         message(data.status.message || "Mining started.");

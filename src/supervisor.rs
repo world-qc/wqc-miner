@@ -509,7 +509,7 @@ impl Supervisor {
                 if self.settings.node_key.trim().is_empty() {
                     return Err(StatusIssue::error(
                         "node_key_missing",
-                        "Set your Node Key in settings before starting (from the testnet dashboard).",
+                        "Paste your Node Key from the testnet dashboard into Node key, then press Start mining.",
                     ));
                 }
             }
@@ -517,7 +517,7 @@ impl Supervisor {
                 if self.settings.wallet_address.trim().is_empty() {
                     return Err(StatusIssue::error(
                         "wallet_missing",
-                        "Set your wallet address in settings before starting.",
+                        "Enter a wallet address, then press Start mining.",
                     ));
                 }
             }

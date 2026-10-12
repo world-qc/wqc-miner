@@ -25,8 +25,7 @@ Until then, use [TESTNET.md](TESTNET.md) to run a worker on public testnet.
 ## UI today
 
 1. Open `http://127.0.0.1:3000`, select **Mainnet**.
-2. Enter a wallet address and save settings.
-3. **Start mining** activates the mock path only (no swarm connection).
+2. Enter a wallet address and click **Start mining**. That stores the address and activates the mock path only (no swarm connection).
 
 Default bootstrap in [`settings.toml.example`](../settings.toml.example) / UI defaults points at
 `https://mainnet.world-qc.io/api/v1/p2p/bootstrap` for when mainnet worker mode is enabled.
