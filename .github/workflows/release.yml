@@ -352,6 +352,37 @@ jobs:
           file "${STAGING}/bin/wqc-core"
           file "${STAGING}/bin/wqc-node"
 
+      - name: Import Developer ID certificate
+        env:
+          APPLE_CERTIFICATE_P12: ${{ secrets.APPLE_CERTIFICATE_P12 }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${APPLE_CERTIFICATE_P12}" || -z "${APPLE_CERTIFICATE_PASSWORD}" ]]; then
+            echo "Set Actions secrets APPLE_CERTIFICATE_P12 and APPLE_CERTIFICATE_PASSWORD." >&2
+            exit 1
+          fi
+          KEYCHAIN="$RUNNER_TEMP/signing.keychain-db"
+          KEYCHAIN_PASSWORD="$(openssl rand -base64 24)"
+          echo "$APPLE_CERTIFICATE_P12" | base64 --decode > "$RUNNER_TEMP/certificate.p12"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security import "$RUNNER_TEMP/certificate.p12" \
+            -P "$APPLE_CERTIFICATE_PASSWORD" \
+            -A -t cert -f pkcs12 -k "$KEYCHAIN"
+          security set-key-partition-list \
+            -S apple-tool:,apple:,codesign: \
+            -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security list-keychains -d user -s "$KEYCHAIN"
+          rm -f "$RUNNER_TEMP/certificate.p12"
+          security find-identity -v -p codesigning "$KEYCHAIN"
+
+      - name: Sign macOS binaries
+        env:
+          APPLE_SIGN_IDENTITY: "Developer ID Application: Yoshitaka Sato (ZV84T86GTH)"
+        run: wqc-miner/packaging/sign-mac.sh sign dist/wqc-miner-mac-universal
+
       - name: Package dmg
         run: |
           hdiutil create \
@@ -359,6 +390,13 @@ jobs:
             -srcfolder "dist/wqc-miner-mac-universal" \
             -ov -format UDZO \
             "dist/wqc-miner-mac-universal.dmg"
+
+      - name: Notarize disk image
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+        run: wqc-miner/packaging/sign-mac.sh notarize dist/wqc-miner-mac-universal.dmg
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -521,16 +559,23 @@ jobs:
           name: ${{ needs.check-tag.outputs.tag }}
           generate_release_notes: true
           body: |
+            ## macOS
+
+            The macOS disk image is signed with Developer ID Application and notarized by Apple.
+
+            ## Windows
+
+            Windows builds are not Authenticode-signed. SmartScreen may warn. See the README inside the zip.
+
             ## Verify provenance
 
-            WQC does **not** use commercial CA code-signing certificates (Sectigo, GlobalSign, Apple Developer ID, etc.).
-            Release assets are bound to this workflow run with [GitHub Artifact Attestations](https://docs.github.com/en/actions/security-guides/using-artifact-attestations-to-establish-provenance-for-builds) (Sigstore).
+            Release assets are also bound to this workflow run with [GitHub Artifact Attestations](https://docs.github.com/en/actions/security-guides/using-artifact-attestations-to-establish-provenance-for-builds) (Sigstore).
 
             ```bash
             gh attestation verify wqc-miner-linux-x64.tar.gz -R world-qc/wqc-miner
             ```
 
-            Replace the filename with the asset you downloaded. OS SmartScreen / Gatekeeper prompts may still appear; treat `gh attestation verify` as the trust path.
+            Replace the filename with the asset you downloaded. Windows SmartScreen may still warn. Treat `gh attestation verify` as the check that the file came from this workflow.
           files: |
             dist/wqc-miner-windows-x64/wqc-miner-windows-x64.zip
             dist/wqc-miner-windows-arm64/wqc-miner-windows-arm64.zip

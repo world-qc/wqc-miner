@@ -25,9 +25,9 @@ Keep `bin/` next to `wqc-miner`. The launcher looks there for the other two prog
 
 Windows builds statically link the Visual C++ runtime. Installing the VC++ Redistributable is not required.
 
-## Windows and macOS may block the first launch
+## Windows may block the first launch
 
-This release is not signed with a commercial code-signing certificate (no Authenticode, no Apple Developer ID). Windows and macOS ask you to confirm before the program runs. Linux does not show this prompt.
+Windows builds are not Authenticode-signed. macOS builds are signed with Developer ID and notarized by Apple. Linux does not show a signing prompt.
 
 ### Windows
 
@@ -40,20 +40,7 @@ Checking **Unblock** on the zip before you extract it covers every file inside.
 
 ### macOS
 
-Gatekeeper may say the developer cannot be verified. It asks once per program, so `wqc-miner`, `bin/wqc-core`, and `bin/wqc-node` each need their own allow.
-
-1. Copy this folder out of the disk image onto the Mac.
-2. Control-click `wqc-miner` and choose **Open**. The dialog that follows only has **Done**. That closes the warning and does not allow the program.
-3. Open **System Settings → Privacy & Security**. When it says the program was blocked, click **Open Anyway**.
-4. Start mining. When macOS blocks `bin/wqc-core`, repeat steps 2 and 3 for that program. Do the same for `bin/wqc-node`.
-
-To allow all three at once, open Terminal, `cd` to this folder, and run:
-
-```bash
-xattr -dr com.apple.quarantine .
-```
-
-That clears the download quarantine flag on this folder only.
+The disk image is signed with Developer ID Application and notarized by Apple. Copy the folder out of the disk image and run `wqc-miner`. Gatekeeper allows `wqc-miner`, `bin/wqc-core`, and `bin/wqc-node` from that image.
 
 To check that the archive matches the GitHub release build:
 
