@@ -64,7 +64,7 @@ Use the filename you downloaded. You still need the SmartScreen or Gatekeeper st
 
 1. Run `wqc-miner` from this folder (`wqc-miner.exe` on Windows).
 2. Open <http://127.0.0.1:3000>.
-3. **Testnet:** select Testnet, paste the operator **Node Key** from <https://testnet.world-qc.io>, save, then **Start mining**.
+3. **Testnet:** select Testnet, paste the operator **Node Key** from <https://testnet.world-qc.io>, then **Start mining**. Start stores the form.
 4. **Mainnet:** the page stores a wallet address and shows mock status only. P2P mining is not connected yet.
 
 ## Data directory
@@ -116,8 +116,8 @@ The admin port has no authentication. Do not bind it on a public address. Use an
 
 | Message | What to do |
 |---------|------------|
-| `node_key_missing` | Select Testnet and save a Node Key from the dashboard |
-| `wallet_missing` | Select Mainnet and save a wallet address |
+| `node_key_missing` | Select Testnet and paste a Node Key from the dashboard, then start again |
+| `wallet_missing` | Select Mainnet and enter a wallet address, then start again |
 | `binaries_missing` | Run `wqc-miner` from this folder so `bin/` stays beside it |
 | `bootstrap_unreachable` | Check outbound HTTPS to the bootstrap URL in settings |
 | `core_unhealthy` / `core_exited` | Core did not stay up; the launcher retries with backoff |
