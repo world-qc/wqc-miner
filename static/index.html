@@ -98,11 +98,11 @@
       font-size: 0.8rem;
       max-height: 240px;
     }
-    #log-view {
-      max-height: 320px;
-      white-space: pre-wrap;
-      word-break: break-word;
-      margin: 0;
+    a.secondary {
+      display: inline-block;
+      text-decoration: none;
+      border-radius: 6px;
+      padding: 0.6rem 1rem;
     }
     .meta { font-size: 0.85rem; color: var(--muted); word-break: break-all; }
     .network-panel { margin-bottom: 1rem; }
@@ -142,28 +142,6 @@
       opacity: 0.85;
     }
     .issue-actions { flex-shrink: 0; }
-    .log-toolbar {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 0.5rem;
-      align-items: center;
-      margin-bottom: 0.75rem;
-    }
-    .log-toolbar label {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.35rem;
-      margin: 0;
-      color: var(--text);
-    }
-    .log-toolbar input[type="checkbox"] { width: auto; margin: 0; }
-    .log-source-btn.active {
-      background: var(--accent);
-      color: #061018;
-      font-weight: 600;
-      border-color: transparent;
-    }
-    #log-path { margin-top: 0.5rem; }
   </style>
 </head>
 <body>
@@ -190,18 +168,12 @@
       <p id="message"></p>
     </section>
 
-    <section id="logs-section">
-      <h2>Logs</h2>
-      <div class="log-toolbar">
-        <button type="button" class="secondary log-source-btn active" data-source="core" id="btn-log-core">Core</button>
-        <button type="button" class="secondary log-source-btn" data-source="node" id="btn-log-node">Node</button>
-        <label><input type="checkbox" id="log-autoscroll" checked /> Auto-scroll</label>
-        <button type="button" class="secondary" id="btn-log-clear">Clear view</button>
-        <button type="button" class="secondary" id="btn-log-reconnect">Reconnect</button>
-        <span class="meta" id="log-ws-state">disconnected</span>
+    <section>
+      <div class="section-head">
+        <h2>Logs</h2>
+        <a class="secondary" href="/logs">Open logs</a>
       </div>
-      <pre id="log-view"></pre>
-      <p class="meta" id="log-path"></p>
+      <p class="meta">Core and node output is on <a href="/logs">/logs</a>.</p>
     </section>
 
     <section>
@@ -291,10 +263,6 @@
       mainnet: ["https://mainnet.world-qc.io/api/v1/p2p/bootstrap"],
     };
 
-    let logSource = "core";
-    let logWs = null;
-    let logLines = [];
-
     const message = (text, isError = false) => {
       const el = $("message");
       el.textContent = text || "";
@@ -339,12 +307,36 @@
       return `TN backend: ${requested} (core starting…)`;
     }
 
-    function applySettings(view) {
+    // Last values written from the server. A field the operator changed
+    // (current !== applied) is left alone when the status poll refreshes.
+    let appliedForm = null;
+
+    function formSnapshot() {
+      return {
+        network: $("network").value,
+        bootstrap_urls: $("bootstrap_urls").value,
+        max_memory_gb: $("max_memory_gb").value,
+        p2p_listen_port: $("p2p_listen_port").value,
+        node_http_port: $("node_http_port").value,
+        core_tcp_port: $("core_tcp_port").value,
+        tn_backend: $("tn_backend").value,
+        auto_start: $("auto_start").checked,
+      };
+    }
+
+    function sameSetting(a, b) {
+      if (typeof a === "boolean" || typeof b === "boolean") return Boolean(a) === Boolean(b);
+      const as = String(a);
+      const bs = String(b);
+      if (as.trim() !== "" && bs.trim() !== "" && !Number.isNaN(Number(as)) && !Number.isNaN(Number(bs))) {
+        return Number(as) === Number(bs);
+      }
+      return as === bs;
+    }
+
+    function applySettings(view, options = {}) {
       $("data-dir").textContent = view.data_dir;
       $("core-url").textContent = view.core_url;
-      $("network").value = view.network;
-      $("bootstrap_urls").value = (view.bootstrap_urls || []).join("\n");
-      $("max_memory_gb").value = view.max_memory_gb;
       if (view.host_max_memory_gb) {
         const input = $("max_memory_gb");
         input.max = String(view.host_max_memory_gb);
@@ -356,12 +348,35 @@
           ? `Host RAM: ${total} GiB — max ${view.host_max_memory_gb} GiB (${reserve} GiB reserved for OS).`
           : "Host reserve: 1 GiB (<16 GiB RAM) or 2 GiB (≥16 GiB).";
       }
-      $("p2p_listen_port").value = view.p2p_listen_port;
-      $("node_http_port").value = view.node_http_port;
-      $("core_tcp_port").value = view.core_tcp_port;
-      $("tn_backend").value = view.tn_backend || "cpu";
-      $("auto_start").checked = !!view.auto_start;
-      toggleNetworkFields(view.network);
+      const next = {
+        network: view.network,
+        bootstrap_urls: (view.bootstrap_urls || []).join("\n"),
+        max_memory_gb: view.max_memory_gb,
+        p2p_listen_port: view.p2p_listen_port,
+        node_http_port: view.node_http_port,
+        core_tcp_port: view.core_tcp_port,
+        tn_backend: view.tn_backend || "cpu",
+        auto_start: !!view.auto_start,
+      };
+      const current = formSnapshot();
+      const keepEdits = !!options.keepEdits && appliedForm;
+      const dirty = (key) => keepEdits && !sameSetting(current[key], appliedForm[key]);
+      if (!dirty("network")) $("network").value = next.network;
+      if (!dirty("bootstrap_urls")) $("bootstrap_urls").value = next.bootstrap_urls;
+      if (!dirty("max_memory_gb")) $("max_memory_gb").value = next.max_memory_gb;
+      if (!dirty("p2p_listen_port")) $("p2p_listen_port").value = next.p2p_listen_port;
+      if (!dirty("node_http_port")) $("node_http_port").value = next.node_http_port;
+      if (!dirty("core_tcp_port")) $("core_tcp_port").value = next.core_tcp_port;
+      if (!dirty("tn_backend")) $("tn_backend").value = next.tn_backend;
+      if (!dirty("auto_start")) $("auto_start").checked = next.auto_start;
+      toggleNetworkFields($("network").value);
+      const recorded = formSnapshot();
+      if (keepEdits) {
+        for (const key of Object.keys(next)) {
+          if (dirty(key)) recorded[key] = appliedForm[key];
+        }
+      }
+      appliedForm = recorded;
       if (!view.node_key_set) {
         $("node_key").placeholder = "Paste operator node key here";
       } else {
@@ -374,68 +389,9 @@
       }
     }
 
-    function renderLogView() {
-      const view = $("log-view");
-      view.textContent = logLines.join("\n");
-      if ($("log-autoscroll").checked) {
-        view.scrollTop = view.scrollHeight;
-      }
-    }
-
-    function setLogWsState(text) {
-      $("log-ws-state").textContent = text;
-    }
-
-    function connectLogWs(source = logSource) {
-      logSource = source;
-      document.querySelectorAll(".log-source-btn").forEach((btn) => {
-        btn.classList.toggle("active", btn.dataset.source === source);
-      });
-      if (logWs) {
-        try { logWs.close(); } catch (_) {}
-        logWs = null;
-      }
-      logLines = [];
-      renderLogView();
-      $("log-path").textContent = "";
-
-      const proto = location.protocol === "https:" ? "wss:" : "ws:";
-      const url = `${proto}//${location.host}/api/logs/ws?source=${encodeURIComponent(source)}&lines=200`;
-      setLogWsState("connecting…");
-      const ws = new WebSocket(url);
-      logWs = ws;
-
-      ws.onopen = () => setLogWsState(`connected (${source})`);
-      ws.onclose = () => {
-        if (logWs === ws) {
-          setLogWsState("disconnected");
-          logWs = null;
-        }
-      };
-      ws.onerror = () => setLogWsState("error");
-      ws.onmessage = (ev) => {
-        let msg;
-        try { msg = JSON.parse(ev.data); } catch (_) { return; }
-        if (msg.type === "hello") {
-          logLines = Array.isArray(msg.lines) ? msg.lines.slice() : [];
-          $("log-path").textContent = msg.path
-            ? `${msg.path}${msg.truncated ? " (truncated to last lines)" : ""}${msg.exists === false ? " — file not created yet" : ""}`
-            : "";
-          renderLogView();
-        } else if (msg.type === "line") {
-          logLines.push(msg.line);
-          if (logLines.length > 2000) logLines = logLines.slice(-1500);
-          renderLogView();
-        } else if (msg.type === "error") {
-          logLines.push(`[ws] ${msg.message}`);
-          renderLogView();
-        }
-      };
-    }
-
     function showLogSource(source) {
-      connectLogWs(source);
-      $("logs-section").scrollIntoView({ behavior: "smooth", block: "start" });
+      const name = source === "node" ? "node" : "core";
+      location.assign(`/logs?source=${encodeURIComponent(name)}`);
     }
 
     function applyIssues(issues) {
@@ -495,7 +451,7 @@
     async function refresh() {
       const data = await api("/api/status");
       applyMiningStatus(data.mining);
-      applySettings(data.settings);
+      applySettings(data.settings, { keepEdits: true });
       $("tn-backend-status").textContent = formatTnBackendLine(
         data.mining,
         data.settings,
@@ -587,7 +543,6 @@
         applyMiningStatus(data.status);
         message(data.status.message || "Mining started.");
         await refresh();
-        connectLogWs(logSource);
       } catch (err) {
         message(err.message, true);
         await refresh().catch(() => {});
@@ -606,25 +561,14 @@
         applyMiningStatus(data.status);
         $("node-json").textContent = "Not running";
         message("Mining stopped.");
-        connectLogWs(logSource);
       } catch (err) {
         message(err.message, true);
       }
     });
 
     $("btn-refresh").addEventListener("click", () => refreshNodeStatus());
-    $("btn-log-clear").addEventListener("click", () => {
-      logLines = [];
-      renderLogView();
-    });
-    $("btn-log-reconnect").addEventListener("click", () => connectLogWs(logSource));
-    document.querySelectorAll(".log-source-btn").forEach((btn) => {
-      btn.addEventListener("click", () => connectLogWs(btn.dataset.source));
-    });
 
-    refresh()
-      .then(() => connectLogWs("core"))
-      .catch((err) => message(err.message, true));
+    refresh().catch((err) => message(err.message, true));
     setInterval(() => refresh().catch(() => {}), 5000);
   </script>
 </body>

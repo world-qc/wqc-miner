@@ -34,6 +34,7 @@ pub fn router(state: AdminState) -> Router {
 
     Router::new()
         .route("/", get(index))
+        .route("/logs", get(logs_page))
         .route("/api/status", get(api_status))
         .route("/api/settings", get(api_get_settings).put(api_put_settings))
         .route("/api/mining/start", post(api_start))
@@ -47,6 +48,10 @@ pub fn router(state: AdminState) -> Router {
 
 async fn index() -> Html<&'static str> {
     Html(include_str!("../static/index.html"))
+}
+
+async fn logs_page() -> Html<&'static str> {
+    Html(include_str!("../static/logs.html"))
 }
 
 async fn api_status(State(state): State<AdminState>) -> Json<serde_json::Value> {

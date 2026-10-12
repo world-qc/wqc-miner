@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>wqc-miner logs</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0f1419;
+      --panel: #1a2332;
+      --border: #2d3a4f;
+      --text: #e7ecf3;
+      --muted: #8b9bb4;
+      --accent: #5b9fd4;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      margin: 0;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      background: var(--bg);
+      color: var(--text);
+    }
+    header {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.75rem 1rem;
+    }
+    h1 { font-size: 1.05rem; margin: 0; }
+    a.back { color: var(--accent); }
+    .meta { font-size: 0.85rem; color: var(--muted); }
+    button {
+      border: none;
+      border-radius: 6px;
+      padding: 0.45rem 0.8rem;
+      font: inherit;
+      cursor: pointer;
+    }
+    .secondary { background: transparent; color: var(--text); border: 1px solid var(--border); }
+    .log-source-btn.active {
+      background: var(--accent);
+      color: #061018;
+      font-weight: 600;
+      border-color: transparent;
+    }
+    label.auto {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      font-size: 0.9rem;
+    }
+    #log-view {
+      flex: 1;
+      min-height: 0;
+      margin: 0 1rem 0.5rem;
+      padding: 0.85rem 1rem;
+      overflow: auto;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 0.85rem;
+      line-height: 1.45;
+    }
+    #log-path {
+      margin: 0 1rem 0.75rem;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <a class="back" href="/">← wqc-miner</a>
+    <h1>Logs</h1>
+    <button type="button" class="secondary log-source-btn active" data-source="core" id="btn-log-core">Core</button>
+    <button type="button" class="secondary log-source-btn" data-source="node" id="btn-log-node">Node</button>
+    <label class="auto"><input type="checkbox" id="log-autoscroll" checked /> Auto-scroll</label>
+    <button type="button" class="secondary" id="btn-log-clear">Clear view</button>
+    <button type="button" class="secondary" id="btn-log-reconnect">Reconnect</button>
+    <span class="meta" id="log-ws-state">disconnected</span>
+  </header>
+  <pre id="log-view"></pre>
+  <p class="meta" id="log-path"></p>
+  <script>
+    const $ = (id) => document.getElementById(id);
+    let logSource = "core";
+    let logWs = null;
+    let logLines = [];
+
+    function renderLogView() {
+      const view = $("log-view");
+      view.textContent = logLines.join("\n");
+      if ($("log-autoscroll").checked) {
+        view.scrollTop = view.scrollHeight;
+      }
+    }
+
+    function connectLogWs(source) {
+      logSource = source === "node" ? "node" : "core";
+      const url = new URL(location.href);
+      url.searchParams.set("source", logSource);
+      history.replaceState(null, "", url);
+      document.querySelectorAll(".log-source-btn").forEach((btn) => {
+        btn.classList.toggle("active", btn.dataset.source === logSource);
+      });
+      if (logWs) {
+        try { logWs.close(); } catch (_) {}
+        logWs = null;
+      }
+      logLines = [];
+      renderLogView();
+      $("log-path").textContent = "";
+      const proto = location.protocol === "https:" ? "wss:" : "ws:";
+      const wsUrl = `${proto}//${location.host}/api/logs/ws?source=${encodeURIComponent(logSource)}&lines=1000`;
+      $("log-ws-state").textContent = "connecting…";
+      const ws = new WebSocket(wsUrl);
+      logWs = ws;
+      ws.onopen = () => { $("log-ws-state").textContent = `connected (${logSource})`; };
+      ws.onclose = () => {
+        if (logWs === ws) {
+          $("log-ws-state").textContent = "disconnected";
+          logWs = null;
+        }
+      };
+      ws.onerror = () => { $("log-ws-state").textContent = "error"; };
+      ws.onmessage = (ev) => {
+        let msg;
+        try { msg = JSON.parse(ev.data); } catch (_) { return; }
+        if (msg.type === "hello") {
+          logLines = Array.isArray(msg.lines) ? msg.lines.slice() : [];
+          $("log-path").textContent = msg.path
+            ? `${msg.path}${msg.truncated ? " (truncated to last lines)" : ""}${msg.exists === false ? " — file not created yet" : ""}`
+            : "";
+          renderLogView();
+        } else if (msg.type === "line") {
+          logLines.push(msg.line);
+          if (logLines.length > 5000) logLines = logLines.slice(-4000);
+          renderLogView();
+        } else if (msg.type === "error") {
+          logLines.push(`[ws] ${msg.message}`);
+          renderLogView();
+        }
+      };
+    }
+
+    $("btn-log-clear").addEventListener("click", () => {
+      logLines = [];
+      renderLogView();
+    });
+    $("btn-log-reconnect").addEventListener("click", () => connectLogWs(logSource));
+    document.querySelectorAll(".log-source-btn").forEach((btn) => {
+      btn.addEventListener("click", () => connectLogWs(btn.dataset.source));
+    });
+
+    const initial = new URLSearchParams(location.search).get("source");
+    connectLogWs(initial === "node" ? "node" : "core");
+  </script>
+</body>
+</html>
