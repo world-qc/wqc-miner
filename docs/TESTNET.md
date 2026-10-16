@@ -17,11 +17,17 @@ Verify release artifacts with [GitHub Artifact Attestations](../README.md#proven
 
 1. Copy [`settings.toml.example`](../settings.toml.example) into the data directory and set `network = "testnet"` and `node_key`.
 2. Set `auto_start = true`, **or** pass `--auto-start`.
-3. Keep `tn_backend = "cpu"` unless you have a working WebGPU stack.
+3. Keep `tn_backend = "cpu"`. See [TN backend](#tn-backend).
 
 Default bootstrap URL is `https://testnet.world-qc.io/api/v1/p2p/bootstrap` (see `settings.toml.example`).
 
 See [README — Headless](../README.md#headless--linux-auto-start) for a systemd unit example.
+
+## TN backend
+
+Keep `tn_backend = "cpu"` on the current public testnet.
+
+Large two-site products are multiplied on the GPU, and bond splits use a randomized SVD. On the saturated 20-qubit circuit at χ=128 the χ cut is flat, so after the range finder the split falls back to a CPU f64 SVD. The published result stays the snap `(16861, 0)`. A release build of that circuit takes about 580 ms on the current CPU path and about 520–740 ms on the GPU path. The earlier full-SVD CPU run of the same circuit took about 370 ms, and neither current path beats it.
 
 ## Environment (injected when mining)
 
