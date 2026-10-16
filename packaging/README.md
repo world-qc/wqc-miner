@@ -93,7 +93,7 @@ The admin page is plain HTTP on `127.0.0.1`. No display is required.
 1. Copy `settings.toml.example` into the data directory as `settings.toml`.
 2. Set `network = "testnet"` and `node_key` (testnet), or `wallet_address` (mainnet).
 3. Set `auto_start = true`, or pass `--auto-start`.
-4. Leave `tn_backend = "cpu"` unless this machine has a working GPU.
+4. Leave `tn_backend = "cpu"`. On the current testnet, CPU is faster than GPU.
 
 If start fails because a credential or binary is missing, the launcher stays up so you can fix settings in the admin page.
 

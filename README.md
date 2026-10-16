@@ -69,7 +69,7 @@ The admin UI is plain HTTP on `127.0.0.1` — no display server is required.
 
 1. Copy `settings.toml.example` into the data directory and set credentials for your network (`node_key` on testnet — see [`docs/TESTNET.md`](docs/TESTNET.md); `wallet_address` on mainnet — see [`docs/MAINNET.md`](docs/MAINNET.md)).
 2. Set `auto_start = true` in `settings.toml`, **or** pass `--auto-start`.
-3. Keep `tn_backend = "cpu"` on headless hosts unless you have a working GPU/WebGPU stack.
+3. Keep `tn_backend = "cpu"` on headless hosts. For the public testnet measurement, see [`docs/TESTNET.md`](docs/TESTNET.md#tn-backend).
 
 If auto-start fails (missing credentials, missing binaries), the process stays up and the admin UI remains available so you can fix settings.
 
