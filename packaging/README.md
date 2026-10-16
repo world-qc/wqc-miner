@@ -53,9 +53,11 @@ Checking **Unblock** on the zip before you extract it covers every file inside.
 
 ### macOS
 
-The disk image and `WQC Miner.app` are signed with Developer ID Application and notarized by Apple. Open `WQC Miner.app`. Gatekeeper allows that app. `wqc-core` and `wqc-node` stay inside the app; the launcher starts them.
+The disk image and `WQC Miner.app` are signed with Developer ID Application and notarized by Apple. Open `WQC Miner.app`. Gatekeeper allows that app. The first time you open it, macOS asks: “WQC Miner” is an app downloaded from the Internet. Are you sure you want to open it? Choose **Open**.
 
-The Dock icon stays while the admin page is running. To stop the app, quit **WQC Miner** in Activity Monitor.
+`wqc-core` and `wqc-node` stay inside the app; the launcher starts them. Opening the app does not open Terminal. The Dock icon bounces for a while, then stays in the Dock. The launcher is running while that icon remains. Open <http://127.0.0.1:3000> to use the admin page.
+
+To stop mining, use **Stop** on that page. That also stops `wqc-core` and `wqc-node`. To quit the launcher, Control-click the Dock icon and choose **Force Quit**. Use **Stop** first when mining is running, because Force Quit ends the launcher immediately and those two programs can keep running.
 
 To check that the archive matches the GitHub release build:
 
@@ -67,7 +69,7 @@ Use the filename you downloaded. On Windows you still need the SmartScreen steps
 
 ## Start
 
-1. On macOS, open `WQC Miner.app`. On Windows and Linux, run `wqc-miner` from this folder (`wqc-miner.exe` on Windows).
+1. On macOS, open `WQC Miner.app`. The Dock icon bounces, then stays, and no Terminal window opens. On Windows and Linux, run `wqc-miner` from this folder (`wqc-miner.exe` on Windows); a console window stays open while the launcher is running.
 2. Open <http://127.0.0.1:3000>. Logs are on <http://127.0.0.1:3000/logs>.
 3. **Testnet:** select Testnet, paste the operator **Node Key** from <https://testnet.world-qc.io>, then **Start mining**. Start stores the form.
 4. **Mainnet:** the page stores a wallet address and shows mock status only. P2P mining is not connected yet.

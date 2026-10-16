@@ -170,7 +170,7 @@ The macOS app and disk image are signed with Developer ID Application (`Yoshitak
 gh attestation verify wqc-miner-linux-x64.tar.gz -R world-qc/wqc-miner
 ```
 
-Windows SmartScreen may still warn. macOS Gatekeeper accepts `WQC Miner.app` from the notarized disk image. Attestation verify remains the check that the file came from this workflow.
+Windows SmartScreen may still warn. macOS Gatekeeper accepts `WQC Miner.app` from the notarized disk image. The first open still asks you to confirm an app downloaded from the internet. Attestation verify remains the check that the file came from this workflow.
 
 ## Upcoming
 

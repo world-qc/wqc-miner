@@ -105,6 +105,7 @@
       padding: 0.6rem 1rem;
     }
     .meta { font-size: 0.85rem; color: var(--muted); word-break: break-all; }
+    .meta a { color: var(--accent); }
     .network-panel { margin-bottom: 1rem; }
     .hidden { display: none; }
     .mock-note {
@@ -188,6 +189,7 @@
         </div>
 
         <div id="testnet-fields">
+          <p class="meta">Public testnet client: <a href="https://testnet.world-qc.io/client/" target="_blank" rel="noreferrer">https://testnet.world-qc.io/client/</a></p>
           <label for="node_key">Node key (from dashboard)</label>
           <textarea id="node_key" placeholder="Paste operator node key here" autocomplete="off"></textarea>
         </div>
