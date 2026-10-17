@@ -264,7 +264,7 @@ jobs:
   build-mac-universal:
     name: wqc-miner-mac-universal
     needs: [check-tag]
-    runs-on: macos-14
+    runs-on: macos-15
     steps:
       - name: Checkout wqc-miner
         uses: actions/checkout@v4
