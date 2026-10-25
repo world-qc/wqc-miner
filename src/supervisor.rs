@@ -848,3 +848,19 @@ async fn stop_child(child: &mut Child) {
         let _ = child.wait().await;
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::time::Duration;
+
+    use super::*;
+
+    #[test]
+    fn core_restart_delay_backs_off_and_caps_at_sixty_seconds() {
+        assert_eq!(Supervisor::core_restart_delay(0), Duration::from_secs(2));
+        assert_eq!(Supervisor::core_restart_delay(1), Duration::from_secs(4));
+        assert_eq!(Supervisor::core_restart_delay(4), Duration::from_secs(32));
+        assert_eq!(Supervisor::core_restart_delay(5), Duration::from_secs(60));
+        assert_eq!(Supervisor::core_restart_delay(100), Duration::from_secs(60));
+    }
+}

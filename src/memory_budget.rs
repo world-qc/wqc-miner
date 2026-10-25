@@ -37,3 +37,17 @@ pub fn host_memory_limits_gib() -> (Option<u64>, Option<u64>) {
     let max_gib = max_wqc_memory_gib_from_total(total_gib);
     (Some(total_gib), Some(max_gib))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn memory_budget_reserves_one_gib_below_sixteen_and_two_at_the_threshold() {
+        assert_eq!(max_wqc_memory_gib_from_total(0), 1);
+        assert_eq!(max_wqc_memory_gib_from_total(1), 1);
+        assert_eq!(max_wqc_memory_gib_from_total(15), 14);
+        assert_eq!(max_wqc_memory_gib_from_total(16), 14);
+        assert_eq!(max_wqc_memory_gib_from_total(17), 15);
+    }
+}
