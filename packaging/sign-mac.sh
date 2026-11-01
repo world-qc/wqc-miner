@@ -12,6 +12,21 @@ usage() {
   exit 2
 }
 
+# Retry a command that talks to Apple's ticket service. A dropped connection
+# fails stapler with exit 68 even after notarization was accepted.
+retry() {
+  local attempts=5 delay=20 n=1
+  until "$@"; do
+    if (( n >= attempts )); then
+      echo "giving up after ${attempts} attempts: $*" >&2
+      return 1
+    fi
+    echo "attempt ${n}/${attempts} failed; retrying in ${delay}s: $*" >&2
+    sleep "$delay"
+    n=$((n + 1))
+  done
+}
+
 sign_one() {
   local path="$1"
   codesign --force --options runtime --timestamp --sign "$IDENTITY" "$path"
@@ -76,8 +91,9 @@ cmd_notarize() {
     --team-id "$APPLE_TEAM_ID" \
     --password "$APPLE_APP_PASSWORD" \
     --wait
-  xcrun stapler staple "$dmg"
-  xcrun stapler validate "$dmg"
+  # Notarization is not resubmitted; only the ticket fetch and check repeat.
+  retry xcrun stapler staple "$dmg"
+  retry xcrun stapler validate "$dmg"
 }
 
 main() {
