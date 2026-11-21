@@ -160,6 +160,8 @@ Open `http://127.0.0.1:3000`, select a network, configure credentials, then **St
 
 Release builds check out sibling repos (`wqc-core`, `wqc-node`, `wqc-stark-engine`) so `wqc-core`'s `[patch]` for `wqc-stark-engine` resolves. `wqc-core` is built with `--features webgpu`.
 
+The two macOS arches build in separate jobs, and a third job joins them with `lipo`, then signs and notarizes the app. A manual dispatch with `publish` unchecked builds every asset without publishing a release, so a change to the workflow can be tried on a branch: `gh workflow run release.yml --ref <branch> -f tag=v<version in Cargo.toml> -f publish=false`.
+
 Artifacts: Windows (x64, arm64), macOS universal `.dmg`, Linux (x64, arm64). Windows and Linux bundles contain `wqc-miner` + `bin/wqc-core` + `bin/wqc-node`. The macOS disk image contains `WQC Miner.app`, with those two programs inside the app. Windows binaries statically link the Visual C++ runtime, so the zip runs on Windows 10+ without the VC++ Redistributable (`VCRUNTIME140.dll`).
 
 ### Signing and provenance

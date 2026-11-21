@@ -12,6 +12,13 @@ on:
         description: "Release tag (SemVer, e.g. v0.1.0)"
         required: true
         type: string
+      publish:
+        # false builds, signs and notarizes every asset without publishing,
+        # e.g. to try a workflow change on a branch.
+        description: "Publish the GitHub Release"
+        required: false
+        default: true
+        type: boolean
 
 permissions:
   contents: write
@@ -261,10 +268,16 @@ jobs:
           path: dist/${{ matrix.artifact_name }}.zip
           if-no-files-found: error
 
-  build-mac-universal:
-    name: wqc-miner-mac-universal
+  # One job per arch, so the two builds run side by side. `mac-universal`
+  # joins them with lipo.
+  build-mac:
+    name: mac-bin-${{ matrix.target }}
     needs: [check-tag]
     runs-on: macos-15
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [aarch64-apple-darwin, x86_64-apple-darwin]
     steps:
       - name: Checkout wqc-miner
         uses: actions/checkout@v4
@@ -307,25 +320,57 @@ jobs:
         uses: dtolnay/rust-toolchain@master
         with:
           toolchain: "1.95"
-          targets: aarch64-apple-darwin,x86_64-apple-darwin
+          targets: ${{ matrix.target }}
 
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
         with:
+          # The matrix jobs share a job id. Key on the target so they do
+          # not write the same cache entry.
+          key: ${{ matrix.target }}
           workspaces: |
             wqc-miner
             wqc-core
             wqc-node
 
-      - name: Build crates (aarch64 + x86_64)
-        shell: bash
-        run: |
-          set -euo pipefail
-          for arch in aarch64-apple-darwin x86_64-apple-darwin; do
-            (cd wqc-core && cargo build --release --locked --features webgpu --target "$arch")
-            (cd wqc-node && cargo build --release --locked --target "$arch")
-            (cd wqc-miner && cargo build --release --locked --target "$arch")
-          done
+      - name: Build wqc-core (webgpu)
+        working-directory: wqc-core
+        run: cargo build --release --locked --features webgpu --target ${{ matrix.target }}
+
+      - name: Build wqc-node
+        working-directory: wqc-node
+        run: cargo build --release --locked --target ${{ matrix.target }}
+
+      - name: Build wqc-miner
+        working-directory: wqc-miner
+        run: cargo build --release --locked --target ${{ matrix.target }}
+
+      - name: Upload binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: mac-bin-${{ matrix.target }}
+          path: |
+            ${{ env.CARGO_TARGET_DIR }}/${{ matrix.target }}/release/wqc-miner
+            ${{ env.CARGO_TARGET_DIR }}/${{ matrix.target }}/release/wqc-core
+            ${{ env.CARGO_TARGET_DIR }}/${{ matrix.target }}/release/wqc-node
+          if-no-files-found: error
+          retention-days: 1
+
+  build-mac-universal:
+    name: wqc-miner-mac-universal
+    needs: [build-mac]
+    runs-on: macos-15
+    steps:
+      - name: Checkout wqc-miner
+        uses: actions/checkout@v4
+        with:
+          path: wqc-miner
+
+      - name: Download binaries
+        uses: actions/download-artifact@v4
+        with:
+          pattern: mac-bin-*
+          path: mac-bin
 
       - name: Create universal binaries
         shell: bash
@@ -334,16 +379,16 @@ jobs:
           STAGING="dist/wqc-miner-mac-universal"
           mkdir -p "${STAGING}/bin"
           lipo -create \
-            "${CARGO_TARGET_DIR}/aarch64-apple-darwin/release/wqc-miner" \
-            "${CARGO_TARGET_DIR}/x86_64-apple-darwin/release/wqc-miner" \
+            mac-bin/mac-bin-aarch64-apple-darwin/wqc-miner \
+            mac-bin/mac-bin-x86_64-apple-darwin/wqc-miner \
             -output "${STAGING}/wqc-miner"
           lipo -create \
-            "${CARGO_TARGET_DIR}/aarch64-apple-darwin/release/wqc-core" \
-            "${CARGO_TARGET_DIR}/x86_64-apple-darwin/release/wqc-core" \
+            mac-bin/mac-bin-aarch64-apple-darwin/wqc-core \
+            mac-bin/mac-bin-x86_64-apple-darwin/wqc-core \
             -output "${STAGING}/bin/wqc-core"
           lipo -create \
-            "${CARGO_TARGET_DIR}/aarch64-apple-darwin/release/wqc-node" \
-            "${CARGO_TARGET_DIR}/x86_64-apple-darwin/release/wqc-node" \
+            mac-bin/mac-bin-aarch64-apple-darwin/wqc-node \
+            mac-bin/mac-bin-x86_64-apple-darwin/wqc-node \
             -output "${STAGING}/bin/wqc-node"
           chmod +x "${STAGING}/wqc-miner" "${STAGING}/bin/wqc-core" "${STAGING}/bin/wqc-node"
           cp wqc-miner/LICENSE wqc-miner/settings.toml.example "${STAGING}/"
@@ -521,6 +566,7 @@ jobs:
   release:
     name: Publish GitHub Release
     needs: [check-tag, build-windows, build-mac-universal, build-linux]
+    if: github.event_name == 'push' || inputs.publish
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -530,6 +576,8 @@ jobs:
       - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
+          # Skip the per-arch mac binaries.
+          pattern: wqc-miner-*
           path: dist
 
       - name: Collect release asset paths
